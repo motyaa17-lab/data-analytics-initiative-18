@@ -273,14 +273,13 @@ def handler(event: dict, context) -> dict:
     # ─── ONLINE ──────────────────────────────────────────────
 
     if action == 'online' and method == 'GET':
-        # Онлайн = last_seen за последние 2 минуты
-        channel = params.get('channel', '')
-        room_id_str = params.get('room_id', '')
         cur.execute(
-            f"SELECT COUNT(*) FROM {schema}.users "
-            f"WHERE last_seen > now() - interval '2 minutes' AND is_banned=FALSE"
+            f"SELECT username, favorite_game FROM {schema}.users "
+            f"WHERE last_seen > now() - interval '2 minutes' AND is_banned=FALSE "
+            f"ORDER BY username ASC LIMIT 50"
         )
-        total_online = cur.fetchone()[0]
-        return resp(200, {'online': total_online})
+        rows = cur.fetchall()
+        users = [{'username': r[0], 'favorite_game': r[1] or ''} for r in rows]
+        return resp(200, {'online': len(users), 'users': users})
 
     return err(404, 'Not found')
