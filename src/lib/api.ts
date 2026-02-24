@@ -36,6 +36,9 @@ export const api = {
       return fetch(`${BASE}?${params}`, { method: "POST", headers: headers(token) }).then(r => r.json());
     },
   },
+  online: {
+    get: () => req("online", "GET"),
+  },
   admin: {
     stats: (token: string) => req("admin_stats", "GET", token),
     logs: (token: string, limit = 50, level = "") => {

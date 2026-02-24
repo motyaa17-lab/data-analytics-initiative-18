@@ -51,6 +51,7 @@ const ChatArea = ({ onSidebarOpen, onRegisterClick, user, token, channel, roomId
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
+  const [online, setOnline] = useState<number | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
 
   const fetchMessages = async () => {
@@ -58,10 +59,16 @@ const ChatArea = ({ onSidebarOpen, onRegisterClick, user, token, channel, roomId
     if (data.messages) setMessages(data.messages);
   };
 
+  const fetchOnline = async () => {
+    const data = await api.online.get();
+    if (typeof data.online === "number") setOnline(data.online);
+  };
+
   useEffect(() => {
     setMessages([]);
     fetchMessages();
-    const interval = setInterval(fetchMessages, 5000);
+    fetchOnline();
+    const interval = setInterval(() => { fetchMessages(); fetchOnline(); }, 5000);
     return () => clearInterval(interval);
   }, [channel, roomId]);
 
@@ -93,6 +100,12 @@ const ChatArea = ({ onSidebarOpen, onRegisterClick, user, token, channel, roomId
         <Hash className="w-5 h-5 text-[#8e9297]" />
         <span className="text-white font-semibold">{label}</span>
         <div className="ml-auto flex items-center gap-3">
+          {online !== null && (
+            <div className="flex items-center gap-1.5 text-xs text-[#3ba55c]">
+              <span className="w-2 h-2 rounded-full bg-[#3ba55c] inline-block"></span>
+              {online} онлайн
+            </div>
+          )}
           <Bell className="w-4 h-4 text-[#b9bbbe] cursor-pointer hover:text-white" />
           <Users className="w-4 h-4 text-[#b9bbbe] cursor-pointer hover:text-white" />
           <Search className="w-4 h-4 text-[#b9bbbe] cursor-pointer hover:text-white" />

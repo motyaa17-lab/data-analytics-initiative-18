@@ -82,6 +82,14 @@ def handler(event: dict, context) -> dict:
             room_id_str = params.get('room_id', '')
             if room_id_str and str(room_id_str).isdigit():
                 room_id = int(room_id_str)
+                # Комната — только для участников
+                user = get_user(cur, schema, token)
+                if not user: return err(401, 'Необходима авторизация')
+                uid = user[0]
+                cur.execute(f"SELECT 1 FROM {schema}.room_members WHERE room_id={room_id} AND user_id={uid}")
+                if not cur.fetchone(): return err(403, 'Ты не участник этой комнаты')
+                # Обновляем last_seen
+                cur.execute(f"UPDATE {schema}.users SET last_seen=now() WHERE id={uid}")
                 cur.execute(
                     f"SELECT m.id,m.content,m.created_at,u.username,u.favorite_game "
                     f"FROM {schema}.messages m JOIN {schema}.users u ON u.id=m.user_id "
@@ -89,6 +97,10 @@ def handler(event: dict, context) -> dict:
                 )
             else:
                 if channel not in VALID_CHANNELS: channel = 'general'
+                # Обновляем last_seen если авторизован
+                user = get_user(cur, schema, token)
+                if user:
+                    cur.execute(f"UPDATE {schema}.users SET last_seen=now() WHERE id={user[0]}")
                 cur.execute(
                     f"SELECT m.id,m.content,m.created_at,u.username,u.favorite_game "
                     f"FROM {schema}.messages m JOIN {schema}.users u ON u.id=m.user_id "
@@ -256,5 +268,18 @@ def handler(event: dict, context) -> dict:
             cur.execute(f"DELETE FROM {schema}.sessions WHERE user_id={int(target_id)}")
         log(cur, schema, 'admin', f"{'Ban' if ban else 'Unban'} user {target_id}", user_id=uid_admin)
         return resp(200, {'ok':True,'banned':ban})
+
+    # ─── ONLINE ──────────────────────────────────────────────
+
+    if action == 'online' and method == 'GET':
+        # Онлайн = last_seen за последние 2 минуты
+        channel = params.get('channel', '')
+        room_id_str = params.get('room_id', '')
+        cur.execute(
+            f"SELECT COUNT(*) FROM {schema}.users "
+            f"WHERE last_seen > now() - interval '2 minutes' AND is_banned=FALSE"
+        )
+        total_online = cur.fetchone()[0]
+        return resp(200, {'online': total_online})
 
     return err(404, 'Not found')
