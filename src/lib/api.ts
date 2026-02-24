@@ -1,19 +1,24 @@
 const BASE = "https://functions.poehali.dev/b1a16ec3-c9d7-4e46-bb90-e30137e5c534";
 
-function headers(token?: string | null) {
-  const h: Record<string, string> = { "Content-Type": "application/json" };
+function headers(method: string, token?: string | null) {
+  const h: Record<string, string> = {};
+  if (method !== "GET") h["Content-Type"] = "application/json";
   if (token) h["X-Authorization"] = `Bearer ${token}`;
   return h;
 }
 
 async function req(action: string, method: string, token?: string | null, body?: object, extra?: Record<string, string>) {
   const params = new URLSearchParams({ action, ...extra });
-  const res = await fetch(`${BASE}?${params}`, {
-    method,
-    headers: headers(token),
-    body: body ? JSON.stringify(body) : undefined,
-  });
-  return res.json();
+  try {
+    const res = await fetch(`${BASE}?${params}`, {
+      method,
+      headers: headers(method, token),
+      body: body ? JSON.stringify(body) : undefined,
+    });
+    return res.json();
+  } catch {
+    return { error: "Нет соединения с сервером" };
+  }
 }
 
 export const api = {
@@ -29,11 +34,15 @@ export const api = {
       req("rooms", "POST", token, { name, description, is_public }),
     join: (token: string, code: string) => {
       const params = new URLSearchParams({ action: "join", code });
-      return fetch(`${BASE}?${params}`, { method: "POST", headers: headers(token) }).then(r => r.json());
+      return fetch(`${BASE}?${params}`, { method: "POST", headers: headers("POST", token) })
+        .then(r => r.json())
+        .catch(() => ({ error: "Нет соединения с сервером" }));
     },
     createInvite: (token: string, room_id: number) => {
       const params = new URLSearchParams({ action: "invite", room_id: String(room_id) });
-      return fetch(`${BASE}?${params}`, { method: "POST", headers: headers(token) }).then(r => r.json());
+      return fetch(`${BASE}?${params}`, { method: "POST", headers: headers("POST", token) })
+        .then(r => r.json())
+        .catch(() => ({ error: "Нет соединения с сервером" }));
     },
   },
   online: {
