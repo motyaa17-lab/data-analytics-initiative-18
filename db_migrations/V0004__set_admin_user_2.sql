@@ -1,0 +1,1 @@
+UPDATE t_p75051746_data_analytics_initi.users SET is_admin = TRUE WHERE id = 2;
