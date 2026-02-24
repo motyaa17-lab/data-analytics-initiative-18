@@ -82,7 +82,21 @@ def handler(event: dict, context) -> dict:
 
     user_id, username, password_hash, favorite_game, is_banned, is_admin = row
 
-    if not bcrypt.checkpw(password.encode(), password_hash.encode()):
+    # Поддержка старых SHA-256 хешей + автомиграция на bcrypt
+    import hashlib
+    sha256_hash = hashlib.sha256(password.encode()).hexdigest()
+    is_bcrypt = password_hash.startswith('$2b$') or password_hash.startswith('$2a$')
+
+    if is_bcrypt:
+        valid = bcrypt.checkpw(password.encode(), password_hash.encode())
+    else:
+        valid = (sha256_hash == password_hash)
+        if valid:
+            # Мигрируем хеш на bcrypt
+            new_hash = bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()
+            cur.execute(f"UPDATE {schema}.users SET password_hash='{new_hash}' WHERE id={user_id}")
+
+    if not valid:
         log_error(cur, schema, 'login', 'Wrong password', ip=ip, user_id=user_id)
         conn.commit()
         cur.close()
