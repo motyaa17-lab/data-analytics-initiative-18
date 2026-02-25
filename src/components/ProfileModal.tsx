@@ -50,7 +50,7 @@ export default function ProfileModal({ username, onClose, onSendFriend, onOpenDM
   const isOwnProfile = profile && currentUserId === profile.id;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={onClose}>
+    <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/60 p-4" onClick={onClose}>
       <div
         className="bg-[#36393f] rounded-xl w-full max-w-xs shadow-2xl overflow-hidden"
         onClick={e => e.stopPropagation()}

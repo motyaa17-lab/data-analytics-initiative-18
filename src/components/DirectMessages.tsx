@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { User } from "@/hooks/useAuth";
 import Icon from "@/components/ui/icon";
+import ProfileModal from "@/components/ProfileModal";
 
 const BASE = "https://functions.poehali.dev/b1a16ec3-c9d7-4e46-bb90-e30137e5c534";
 
@@ -48,6 +49,7 @@ async function apiSendDM(toId: number, content: string, token: string) {
 interface Friend { id: number; username: string; favorite_game: string; }
 interface FriendRequest { request_id: number; user_id: number; username: string; favorite_game: string; }
 interface DMessage { id: number; content: string; created_at: string; username: string; is_removed?: boolean; }
+interface DMContextMenu { msgId: number; x: number; y: number; isMe: boolean; }
 
 function avatarColor(name: string) {
   const colors = ["#5865f2","#eb459e","#ed4245","#fee75c","#57f287","#1abc9c","#3498db","#e91e63"];
@@ -86,9 +88,13 @@ export default function DirectMessages({ user, token, onClose, seenKey = "frikor
   const [msgText, setMsgText] = useState("");
   const [loading, setLoading] = useState(false);
   const [newMsgCount, setNewMsgCount] = useState(0);
+  const [dmContextMenu, setDmContextMenu] = useState<DMContextMenu | null>(null);
+  const [profileUsername, setProfileUsername] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const uid = (user as unknown as { id: number }).id;
 
   const isAtBottom = () => {
     const el = scrollContainerRef.current;
@@ -209,10 +215,13 @@ export default function DirectMessages({ user, token, onClose, seenKey = "frikor
 
   if (activeFriend) {
     return (
-      <div className="fixed inset-0 z-50 flex items-stretch justify-start bg-black/60" onClick={onClose}>
+      <div
+        className="fixed inset-0 z-50 flex items-stretch justify-start bg-black/60"
+        onClick={() => { onClose(); setDmContextMenu(null); }}
+      >
         <div
           className="relative flex flex-col bg-[#36393f] w-full max-w-md h-full shadow-2xl"
-          onClick={e => e.stopPropagation()}
+          onClick={e => { e.stopPropagation(); setDmContextMenu(null); }}
         >
           <div className="flex items-center gap-3 px-4 py-3 bg-[#2f3136] border-b border-black/20">
             <button
@@ -227,7 +236,10 @@ export default function DirectMessages({ user, token, onClose, seenKey = "frikor
             >
               {activeFriend.username[0].toUpperCase()}
             </div>
-            <div className="min-w-0">
+            <div
+              className="min-w-0 cursor-pointer hover:opacity-80"
+              onClick={() => setProfileUsername(activeFriend.username)}
+            >
               <div className="font-semibold text-white text-sm truncate">{activeFriend.username}</div>
               {activeFriend.favorite_game && (
                 <div className="text-xs text-[#b9bbbe] truncate">{activeFriend.favorite_game}</div>
@@ -248,10 +260,19 @@ export default function DirectMessages({ user, token, onClose, seenKey = "frikor
               {messages.map(msg => {
                 const isMe = msg.username === user.username;
                 return (
-                  <div key={msg.id} className={`flex gap-2 group ${isMe ? "flex-row-reverse" : ""}`}>
+                  <div
+                    key={msg.id}
+                    className={`flex gap-2 group ${isMe ? "flex-row-reverse" : ""}`}
+                    onContextMenu={e => {
+                      if (msg.is_removed) return;
+                      e.preventDefault();
+                      setDmContextMenu({ msgId: msg.id, x: e.clientX, y: e.clientY, isMe });
+                    }}
+                  >
                     <div
-                      className="w-7 h-7 rounded-full flex items-center justify-center text-white font-bold text-xs flex-shrink-0 self-end"
+                      className="w-7 h-7 rounded-full flex items-center justify-center text-white font-bold text-xs flex-shrink-0 self-end cursor-pointer hover:opacity-80"
                       style={{ background: avatarColor(msg.username) }}
+                      onClick={() => setProfileUsername(msg.username)}
                     >
                       {msg.username[0].toUpperCase()}
                     </div>
@@ -308,7 +329,53 @@ export default function DirectMessages({ user, token, onClose, seenKey = "frikor
               <Icon name="Send" size={16} />
             </button>
           </div>
+
+          {/* Context menu */}
+          {dmContextMenu && (
+            <div
+              className="fixed z-[60] bg-[#18191c] border border-[#202225] rounded-lg shadow-2xl py-1 min-w-[160px]"
+              style={{ top: dmContextMenu.y, left: dmContextMenu.x }}
+              onClick={e => e.stopPropagation()}
+            >
+              <button
+                onClick={() => {
+                  const msg = messages.find(m => m.id === dmContextMenu.msgId);
+                  if (msg) navigator.clipboard.writeText(msg.content);
+                  setDmContextMenu(null);
+                }}
+                className="w-full flex items-center gap-2.5 px-3 py-2 text-[#dcddde] hover:bg-[#5865f2] hover:text-white text-sm transition-colors"
+              >
+                <Icon name="Copy" size={14} />
+                Скопировать
+              </button>
+              {dmContextMenu.isMe && (
+                <>
+                  <div className="border-t border-[#202225] my-1" />
+                  <button
+                    onClick={() => {
+                      handleDeleteDM(dmContextMenu.msgId);
+                      setDmContextMenu(null);
+                    }}
+                    className="w-full flex items-center gap-2.5 px-3 py-2 text-[#ed4245] hover:bg-[#ed4245] hover:text-white text-sm transition-colors"
+                  >
+                    <Icon name="Trash2" size={14} />
+                    Удалить
+                  </button>
+                </>
+              )}
+            </div>
+          )}
         </div>
+
+        {/* Profile modal */}
+        {profileUsername && (
+          <ProfileModal
+            username={profileUsername}
+            onClose={() => setProfileUsername(null)}
+            token={token}
+            currentUserId={uid}
+          />
+        )}
       </div>
     );
   }
