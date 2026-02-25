@@ -12,6 +12,7 @@ export interface Message {
   favorite_game: string;
   avatar_url?: string;
   badge?: string;
+  image_url?: string;
   is_removed?: boolean;
   author_id?: number;
   edited?: boolean;

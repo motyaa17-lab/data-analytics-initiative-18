@@ -34,8 +34,10 @@ export const api = {
   messages: {
     get: (channel: string, token?: string | null, room_id?: number) =>
       req("messages", "GET", token, undefined, room_id ? { channel, room_id: String(room_id) } : { channel }),
-    send: (token: string, content: string, channel: string, room_id?: number) =>
-      req("messages", "POST", token, { content, channel, ...(room_id ? { room_id } : {}) }),
+    send: (token: string, content: string, channel: string, room_id?: number, image_url?: string) =>
+      req("messages", "POST", token, { content, channel, ...(room_id ? { room_id } : {}), ...(image_url ? { image_url } : {}) }),
+    uploadImage: (token: string, image: string) =>
+      req("upload_image", "POST", token, { image }),
     remove: (token: string, msg_id: number) =>
       req("delete_msg", "POST", token, { msg_id }),
     edit: (token: string, msg_id: number, content: string) =>

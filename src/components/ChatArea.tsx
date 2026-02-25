@@ -40,6 +40,9 @@ const ChatArea = ({ onSidebarOpen, onRegisterClick, user, token, channel, roomId
   const [replyTo, setReplyTo] = useState<Message | null>(null);
   const [editingMsg, setEditingMsg] = useState<{ id: number; content: string } | null>(null);
   const [profileUsername, setProfileUsername] = useState<string | null>(null);
+  const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const [imageUrl, setImageUrl] = useState<string | null>(null);
+  const [imageUploading, setImageUploading] = useState(false);
   const lastMsgIdRef = useRef<number | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
@@ -111,9 +114,33 @@ const ChatArea = ({ onSidebarOpen, onRegisterClick, user, token, channel, roomId
     return () => window.removeEventListener("click", close);
   }, []);
 
+  const handleImageSelect = async (file: File) => {
+    if (!token) return;
+    const reader = new FileReader();
+    reader.onload = async (ev) => {
+      const dataUrl = ev.target?.result as string;
+      setImagePreview(dataUrl);
+      setImageUploading(true);
+      const res = await api.messages.uploadImage(token, dataUrl);
+      setImageUploading(false);
+      if (res.ok && res.image_url) {
+        setImageUrl(res.image_url as string);
+      } else {
+        setImagePreview(null);
+        setImageUrl(null);
+      }
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleImageRemove = () => {
+    setImagePreview(null);
+    setImageUrl(null);
+  };
+
   const sendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!input.trim() || !token) return;
+    if ((!input.trim() && !imageUrl) || !token) return;
 
     if (editingMsg) {
       const res = await api.messages.edit(token, editingMsg.id, input.trim());
@@ -129,9 +156,12 @@ const ChatArea = ({ onSidebarOpen, onRegisterClick, user, token, channel, roomId
     const content = replyTo
       ? `↩ @${replyTo.username}: "${replyTo.content.slice(0, 50)}${replyTo.content.length > 50 ? '…' : ''}"\n${input.trim()}`
       : input.trim();
+    const attachedImageUrl = imageUrl || undefined;
     setInput("");
     setReplyTo(null);
-    const data = await api.messages.send(token, content, channel, roomId);
+    setImagePreview(null);
+    setImageUrl(null);
+    const data = await api.messages.send(token, content, channel, roomId, attachedImageUrl);
     setSending(false);
     if (data.success && data.message) {
       const msg = data.message as Message;
@@ -286,10 +316,14 @@ const ChatArea = ({ onSidebarOpen, onRegisterClick, user, token, channel, roomId
           editingMsg={editingMsg}
           label={label}
           inputRef={inputRef}
+          imagePreview={imagePreview}
+          imageUploading={imageUploading}
           onInputChange={setInput}
           onSubmit={sendMessage}
           onCancelReplyOrEdit={() => { setReplyTo(null); setEditingMsg(null); setInput(""); }}
           onRegisterClick={onRegisterClick}
+          onImageSelect={handleImageSelect}
+          onImageRemove={handleImageRemove}
         />
       </div>
 

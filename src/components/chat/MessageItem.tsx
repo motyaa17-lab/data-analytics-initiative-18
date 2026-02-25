@@ -65,7 +65,23 @@ export default function MessageItem({
         {msg.is_removed ? (
           <p className="text-[#72767d] text-base md:text-sm italic">сообщение удалено</p>
         ) : (
-          <p className="text-[#dcddde] text-base md:text-sm break-words whitespace-pre-wrap leading-relaxed">{msg.content}</p>
+          <>
+            {msg.content && (
+              <p className="text-[#dcddde] text-base md:text-sm break-words whitespace-pre-wrap leading-relaxed">{msg.content}</p>
+            )}
+            {msg.image_url && (
+              <div className="mt-1">
+                <a href={msg.image_url} target="_blank" rel="noopener noreferrer">
+                  <img
+                    src={msg.image_url}
+                    alt="фото"
+                    className="max-w-xs max-h-72 rounded-lg object-contain cursor-pointer hover:opacity-90 transition-opacity border border-[#40444b]"
+                    loading="lazy"
+                  />
+                </a>
+              </div>
+            )}
+          </>
         )}
         {/* Reactions */}
         {!msg.is_removed && (msg.reactions || []).length > 0 && (

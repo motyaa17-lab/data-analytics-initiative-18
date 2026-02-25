@@ -19,6 +19,7 @@
     {"name": "Upload avatar no auth", "method": "POST", "path": "/?action=upload_avatar", "body": {"image": "data:image/png;base64,abc"}, "expectedStatus": 401},
     {"name": "Admin messages no auth", "method": "GET", "path": "/?action=admin_messages&channel=general", "expectedStatus": 403},
     {"name": "Admin clear no auth", "method": "POST", "path": "/?action=admin_clear", "body": {"channel": "general"}, "expectedStatus": 403},
-    {"name": "Admin set badge no auth", "method": "POST", "path": "/?action=admin_set_badge", "body": {}, "expectedStatus": 403}
+    {"name": "Admin set badge no auth", "method": "POST", "path": "/?action=admin_set_badge", "body": {}, "expectedStatus": 403},
+    {"name": "Upload image no auth", "method": "POST", "path": "/?action=upload_image", "body": {"image": "data:image/png;base64,abc"}, "expectedStatus": 401}
   ]
 }

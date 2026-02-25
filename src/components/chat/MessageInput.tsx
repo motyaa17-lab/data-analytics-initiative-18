@@ -1,5 +1,5 @@
-import { RefObject } from "react";
-import { Send, X } from "lucide-react";
+import { RefObject, useRef } from "react";
+import { Send, X, ImagePlus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import Icon from "@/components/ui/icon";
 import { User } from "@/hooks/useAuth";
@@ -13,16 +13,32 @@ interface Props {
   editingMsg: { id: number; content: string } | null;
   label: string;
   inputRef: RefObject<HTMLInputElement>;
+  imagePreview: string | null;
+  imageUploading: boolean;
   onInputChange: (value: string) => void;
   onSubmit: (e: React.FormEvent) => void;
   onCancelReplyOrEdit: () => void;
   onRegisterClick: () => void;
+  onImageSelect: (file: File) => void;
+  onImageRemove: () => void;
 }
 
 export default function MessageInput({
   user, input, sending, replyTo, editingMsg, label,
-  inputRef, onInputChange, onSubmit, onCancelReplyOrEdit, onRegisterClick,
+  inputRef, imagePreview, imageUploading,
+  onInputChange, onSubmit, onCancelReplyOrEdit, onRegisterClick,
+  onImageSelect, onImageRemove,
 }: Props) {
+  const fileRef = useRef<HTMLInputElement>(null);
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) onImageSelect(file);
+    e.target.value = "";
+  };
+
+  const canSend = (input.trim() || imagePreview) && !sending && !imageUploading;
+
   return (
     <>
       {/* Reply / Edit bar */}
@@ -37,19 +53,54 @@ export default function MessageInput({
               <p className="text-[#72767d] text-xs truncate">{replyTo.content}</p>
             )}
           </div>
-          <button
-            onClick={onCancelReplyOrEdit}
-            className="text-[#72767d] hover:text-white flex-shrink-0"
-          >
+          <button onClick={onCancelReplyOrEdit} className="text-[#72767d] hover:text-white flex-shrink-0">
             <X className="w-3.5 h-3.5" />
           </button>
+        </div>
+      )}
+
+      {/* Image preview */}
+      {imagePreview && (
+        <div className="mx-3 mb-1 relative w-fit">
+          <div className="relative rounded-lg overflow-hidden border border-[#40444b]">
+            <img src={imagePreview} alt="preview" className="max-h-40 max-w-xs object-contain rounded-lg" />
+            {imageUploading && (
+              <div className="absolute inset-0 bg-black/50 flex items-center justify-center rounded-lg">
+                <Icon name="Loader2" size={24} className="text-white animate-spin" />
+              </div>
+            )}
+          </div>
+          {!imageUploading && (
+            <button
+              onClick={onImageRemove}
+              className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-[#ed4245] rounded-full flex items-center justify-center text-white hover:bg-[#c03537] transition-colors"
+            >
+              <X className="w-3 h-3" />
+            </button>
+          )}
         </div>
       )}
 
       {/* Input */}
       <div className="p-3 flex-shrink-0 border-t border-[#202225]">
         {user ? (
-          <form onSubmit={onSubmit} className="flex gap-2">
+          <form onSubmit={onSubmit} className="flex gap-2 items-center">
+            <input
+              ref={fileRef}
+              type="file"
+              accept="image/jpeg,image/png,image/webp,image/gif"
+              className="hidden"
+              onChange={handleFileChange}
+            />
+            <button
+              type="button"
+              onClick={() => fileRef.current?.click()}
+              disabled={sending || imageUploading || !!editingMsg}
+              className="text-[#b9bbbe] hover:text-[#dcddde] hover:bg-[#40444b] rounded-lg p-2 transition-colors disabled:opacity-40 flex-shrink-0 min-w-[40px] min-h-[44px] flex items-center justify-center"
+              title="Прикрепить фото"
+            >
+              <ImagePlus className="w-5 h-5" />
+            </button>
             <input
               ref={inputRef}
               value={input}
@@ -58,8 +109,15 @@ export default function MessageInput({
               disabled={sending}
               className="flex-1 bg-[#40444b] text-white placeholder-[#72767d] rounded-lg px-3 py-3 text-sm outline-none focus:ring-1 focus:ring-[#5865f2] disabled:opacity-60 min-h-[44px]"
             />
-            <Button type="submit" disabled={!input.trim() || sending} className="bg-[#5865f2] hover:bg-[#4752c4] text-white px-4 disabled:opacity-40 min-w-[44px] min-h-[44px]">
-              <Send className="w-5 h-5" />
+            <Button
+              type="submit"
+              disabled={!canSend}
+              className="bg-[#5865f2] hover:bg-[#4752c4] text-white px-4 disabled:opacity-40 min-w-[44px] min-h-[44px]"
+            >
+              {imageUploading
+                ? <Icon name="Loader2" size={18} className="animate-spin" />
+                : <Send className="w-5 h-5" />
+              }
             </Button>
           </form>
         ) : (

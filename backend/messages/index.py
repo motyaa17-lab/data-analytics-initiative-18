@@ -118,7 +118,7 @@ def handler(event: dict, context) -> dict:
                 if not cur.fetchone(): return err(403, 'Ты не участник этой комнаты')
                 cur.execute(f"UPDATE {schema}.users SET last_seen=now() WHERE id={uid}")
                 cur.execute(
-                    f"SELECT m.id,m.content,m.created_at,u.username,u.favorite_game,m.is_removed,m.user_id,m.edited,u.avatar_url,u.badge "
+                    f"SELECT m.id,m.content,m.created_at,u.username,u.favorite_game,m.is_removed,m.user_id,m.edited,u.avatar_url,u.badge,m.image_url "
                     f"FROM {schema}.messages m JOIN {schema}.users u ON u.id=m.user_id "
                     f"WHERE m.room_id={room_id} ORDER BY m.created_at ASC LIMIT 100"
                 )
@@ -128,7 +128,7 @@ def handler(event: dict, context) -> dict:
                 if user:
                     cur.execute(f"UPDATE {schema}.users SET last_seen=now() WHERE id={user[0]}")
                 cur.execute(
-                    f"SELECT m.id,m.content,m.created_at,u.username,u.favorite_game,m.is_removed,m.user_id,m.edited,u.avatar_url,u.badge "
+                    f"SELECT m.id,m.content,m.created_at,u.username,u.favorite_game,m.is_removed,m.user_id,m.edited,u.avatar_url,u.badge,m.image_url "
                     f"FROM {schema}.messages m JOIN {schema}.users u ON u.id=m.user_id "
                     f"WHERE m.channel='{channel}' AND m.room_id IS NULL ORDER BY m.created_at ASC LIMIT 100"
                 )
@@ -137,7 +137,7 @@ def handler(event: dict, context) -> dict:
             reactions = get_reactions(cur, schema, message_ids)
             msgs = []
             for r in rows:
-                mid, content, created_at, username, fav, is_removed, msg_uid, edited, avatar_url, badge = r
+                mid, content, created_at, username, fav, is_removed, msg_uid, edited, avatar_url, badge, image_url = r
                 msgs.append({
                     'id': mid,
                     'content': content if not is_removed else '',
@@ -149,6 +149,7 @@ def handler(event: dict, context) -> dict:
                     'edited': bool(edited),
                     'avatar_url': avatar_url or '',
                     'badge': badge or '',
+                    'image_url': image_url or '',
                     'reactions': reactions.get(mid, [])
                 })
             return resp(200, {'messages': msgs})
@@ -163,21 +164,23 @@ def handler(event: dict, context) -> dict:
                 return err(429, 'Слишком быстро. Подожди немного.')
 
             content = sanitize(body.get('content') or '')
+            image_url = body.get('image_url') or ''
             channel = body.get('channel', 'general')
             room_id_str = str(body.get('room_id', ''))
 
-            if not content: return err(400, 'Сообщение пустое')
+            if not content and not image_url: return err(400, 'Сообщение пустое')
             if len(content) > 2000: return err(400, 'Максимум 2000 символов')
 
             sc = content.replace("'", "''")
+            img_val = f"'{image_url.replace(chr(39), '')}'" if image_url else 'NULL'
             if room_id_str.isdigit():
                 room_id = int(room_id_str)
                 cur.execute(f"SELECT 1 FROM {schema}.room_members WHERE room_id={room_id} AND user_id={uid}")
                 if not cur.fetchone(): return err(403, 'Ты не участник этой комнаты')
-                cur.execute(f"INSERT INTO {schema}.messages(user_id,room_id,content) VALUES({uid},{room_id},'{sc}') RETURNING id,created_at")
+                cur.execute(f"INSERT INTO {schema}.messages(user_id,room_id,content,image_url) VALUES({uid},{room_id},'{sc}',{img_val}) RETURNING id,created_at")
             else:
                 if channel not in VALID_CHANNELS: channel = 'general'
-                cur.execute(f"INSERT INTO {schema}.messages(user_id,channel,content) VALUES({uid},'{channel}','{sc}') RETURNING id,created_at")
+                cur.execute(f"INSERT INTO {schema}.messages(user_id,channel,content,image_url) VALUES({uid},'{channel}','{sc}',{img_val}) RETURNING id,created_at")
 
             msg_id, created_at = cur.fetchone()
             cur.execute(f"SELECT avatar_url, badge FROM {schema}.users WHERE id={uid}")
@@ -188,6 +191,7 @@ def handler(event: dict, context) -> dict:
                 'is_removed': False, 'author_id': uid, 'edited': False,
                 'avatar_url': av_row[0] if av_row and av_row[0] else '',
                 'badge': av_row[1] if av_row and av_row[1] else '',
+                'image_url': image_url,
                 'reactions': []
             }})
 
@@ -404,6 +408,34 @@ def handler(event: dict, context) -> dict:
         cdn_url = f"https://cdn.poehali.dev/projects/{os.environ['AWS_ACCESS_KEY_ID']}/bucket/{key}"
         cur.execute(f"UPDATE {schema}.users SET avatar_url='{cdn_url}' WHERE id={uid}")
         return resp(200, {'ok': True, 'avatar_url': cdn_url})
+
+    # ─── IMAGE UPLOAD ────────────────────────────────────────
+
+    if action == 'upload_image' and method == 'POST':
+        user = get_user(cur, schema, token)
+        if not user: return err(401, 'Необходима авторизация')
+        uid = user[0]
+        data_url = body.get('image', '')
+        if not data_url: return err(400, 'Нет изображения')
+        if ',' not in data_url: return err(400, 'Неверный формат')
+        header, b64data = data_url.split(',', 1)
+        if 'image/jpeg' in header or 'image/jpg' in header:
+            ext, ct = 'jpg', 'image/jpeg'
+        elif 'image/png' in header:
+            ext, ct = 'png', 'image/png'
+        elif 'image/webp' in header:
+            ext, ct = 'webp', 'image/webp'
+        elif 'image/gif' in header:
+            ext, ct = 'gif', 'image/gif'
+        else:
+            return err(400, 'Допустимы только JPG, PNG, WebP, GIF')
+        img_bytes = base64.b64decode(b64data)
+        if len(img_bytes) > 8 * 1024 * 1024: return err(400, 'Файл больше 8MB')
+        key = f"chat_images/{uid}_{int(time.time())}.{ext}"
+        s3 = s3_client()
+        s3.put_object(Bucket='files', Key=key, Body=img_bytes, ContentType=ct)
+        cdn_url = f"https://cdn.poehali.dev/projects/{os.environ['AWS_ACCESS_KEY_ID']}/bucket/{key}"
+        return resp(200, {'ok': True, 'image_url': cdn_url})
 
     # ─── SETTINGS ────────────────────────────────────────────
 
