@@ -211,8 +211,8 @@ const ChatArea = ({ onSidebarOpen, onRegisterClick, user, token, channel, roomId
       <div className="flex-1 flex flex-col min-h-0 min-w-0">
         {/* Header */}
         <div className="h-12 bg-[#36393f] border-b border-[#202225] flex items-center px-4 gap-2 flex-shrink-0">
-          <Button variant="ghost" className="lg:hidden text-[#8e9297] hover:text-[#dcddde] hover:bg-[#40444b] p-1 mr-2" onClick={onSidebarOpen}>
-            <Menu className="w-5 h-5" />
+          <Button variant="ghost" className="lg:hidden text-[#8e9297] hover:text-[#dcddde] hover:bg-[#40444b] w-10 h-10 p-0 mr-1 flex-shrink-0" onClick={onSidebarOpen}>
+            <Menu className="w-6 h-6" />
           </Button>
           <Hash className="w-5 h-5 text-[#8e9297]" />
           <span className="text-white font-semibold">{label}</span>

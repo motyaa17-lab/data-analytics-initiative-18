@@ -142,17 +142,21 @@ const ChannelsSidebar = ({ mobileSidebarOpen, onClose, activeChannel, activeRoom
 
   return (
     <>
-      <div className={`${mobileSidebarOpen ? "flex" : "hidden"} lg:flex w-full lg:w-60 bg-[#2f3136] flex-col`}>
+      {/* Мобильный overlay-фон */}
+      {mobileSidebarOpen && (
+        <div className="lg:hidden fixed inset-0 z-40 bg-black/60" onClick={onClose} />
+      )}
+      <div className={`${mobileSidebarOpen ? "flex fixed inset-y-0 left-0 z-50 w-[85vw] max-w-xs" : "hidden"} lg:flex lg:relative lg:w-60 bg-[#2f3136] flex-col`}>
         <div className="p-4 border-b border-[#202225] flex items-center justify-between flex-shrink-0">
           <h2 className="text-white font-semibold">Frikords</h2>
           <div className="flex items-center gap-1">
             {user && onDMClick && (
-              <Button variant="ghost" className="text-[#b9bbbe] hover:text-white hover:bg-[#40444b] p-1" onClick={onDMClick} title="Личные сообщения">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+              <Button variant="ghost" className="text-[#b9bbbe] hover:text-white hover:bg-[#40444b] w-10 h-10 p-0" onClick={onDMClick} title="Личные сообщения">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
               </Button>
             )}
-            <Button variant="ghost" className="lg:hidden text-[#b9bbbe] hover:text-white hover:bg-[#40444b] p-1" onClick={onClose}>
-              <X className="w-4 h-4" />
+            <Button variant="ghost" className="lg:hidden text-[#b9bbbe] hover:text-white hover:bg-[#40444b] w-10 h-10 p-0" onClick={onClose}>
+              <X className="w-5 h-5" />
             </Button>
           </div>
         </div>
@@ -188,12 +192,12 @@ const ChannelsSidebar = ({ mobileSidebarOpen, onClose, activeChannel, activeRoom
                 <span>Мои комнаты</span>
               </div>
               {user && (
-                <div className="flex gap-1">
-                  <button onClick={() => { setShowJoin(true); setShowCreate(false); setError(""); }} className="text-[#8e9297] hover:text-white p-0.5" title="Вступить по инвайту">
-                    <Link className="w-3.5 h-3.5" />
+                <div className="flex gap-0.5">
+                  <button onClick={() => { setShowJoin(true); setShowCreate(false); setError(""); }} className="text-[#8e9297] hover:text-white w-8 h-8 flex items-center justify-center rounded hover:bg-[#40444b]" title="Вступить по инвайту">
+                    <Link className="w-4 h-4" />
                   </button>
-                  <button onClick={() => { setShowCreate(true); setShowJoin(false); setError(""); }} className="text-[#8e9297] hover:text-white p-0.5" title="Создать комнату">
-                    <Plus className="w-3.5 h-3.5" />
+                  <button onClick={() => { setShowCreate(true); setShowJoin(false); setError(""); }} className="text-[#8e9297] hover:text-white w-8 h-8 flex items-center justify-center rounded hover:bg-[#40444b]" title="Создать комнату">
+                    <Plus className="w-4 h-4" />
                   </button>
                 </div>
               )}
@@ -321,14 +325,14 @@ const ChannelsSidebar = ({ mobileSidebarOpen, onClose, activeChannel, activeRoom
               </div>
               <div className="flex gap-0.5">
                 {user.is_admin && (
-                  <Button variant="ghost" size="sm" className="w-7 h-7 p-0 hover:bg-[#40444b] text-[#faa61a]" onClick={onAdminClick} title="Админ-панель">
+                  <Button variant="ghost" size="sm" className="w-9 h-9 p-0 hover:bg-[#40444b] text-[#faa61a]" onClick={onAdminClick} title="Админ-панель">
                     <span className="text-xs font-bold">A</span>
                   </Button>
                 )}
-                <Button variant="ghost" size="sm" className="w-7 h-7 p-0 hover:bg-[#40444b]" onClick={onSettingsClick} title="Настройки">
-                  <Icon name="Settings" size={14} className="text-[#b9bbbe]" />
+                <Button variant="ghost" size="sm" className="w-9 h-9 p-0 hover:bg-[#40444b]" onClick={onSettingsClick} title="Настройки">
+                  <Icon name="Settings" size={16} className="text-[#b9bbbe]" />
                 </Button>
-                <Button variant="ghost" size="sm" className="w-7 h-7 p-0 hover:bg-[#40444b]" onClick={onLogout} title="Выйти">
+                <Button variant="ghost" size="sm" className="w-9 h-9 p-0 hover:bg-[#40444b]" onClick={onLogout} title="Выйти">
                   <LogOut className="w-4 h-4 text-[#b9bbbe]" />
                 </Button>
               </div>

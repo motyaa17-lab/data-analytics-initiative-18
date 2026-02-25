@@ -56,17 +56,17 @@ export default function MessageInput({
               onChange={e => onInputChange(e.target.value)}
               placeholder={editingMsg ? "Редактировать сообщение..." : `Написать в #${label}...`}
               disabled={sending}
-              className="flex-1 bg-[#40444b] text-white placeholder-[#72767d] rounded px-3 py-2.5 text-sm outline-none focus:ring-1 focus:ring-[#5865f2] disabled:opacity-60"
+              className="flex-1 bg-[#40444b] text-white placeholder-[#72767d] rounded-lg px-3 py-3 text-sm outline-none focus:ring-1 focus:ring-[#5865f2] disabled:opacity-60 min-h-[44px]"
             />
-            <Button type="submit" disabled={!input.trim() || sending} className="bg-[#5865f2] hover:bg-[#4752c4] text-white px-3 disabled:opacity-40">
-              <Send className="w-4 h-4" />
+            <Button type="submit" disabled={!input.trim() || sending} className="bg-[#5865f2] hover:bg-[#4752c4] text-white px-4 disabled:opacity-40 min-w-[44px] min-h-[44px]">
+              <Send className="w-5 h-5" />
             </Button>
           </form>
         ) : (
-          <div className="flex items-center justify-between bg-[#40444b] rounded px-3 py-2.5">
+          <div className="flex items-center justify-between bg-[#40444b] rounded-lg px-3 py-3 min-h-[44px]">
             <span className="text-[#72767d] text-sm">Войди, чтобы писать</span>
-            <Button size="sm" className="bg-[#5865f2] hover:bg-[#4752c4] text-white text-xs" onClick={onRegisterClick}>
-              Войти / зарегистрироваться
+            <Button size="sm" className="bg-[#5865f2] hover:bg-[#4752c4] text-white text-xs min-h-[36px]" onClick={onRegisterClick}>
+              Войти
             </Button>
           </div>
         )}

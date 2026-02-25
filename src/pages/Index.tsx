@@ -103,7 +103,7 @@ const Index = () => {
   };
 
   return (
-    <div className="h-screen bg-[#36393f] text-white flex flex-col overflow-hidden">
+    <div className="h-[100dvh] bg-[#36393f] text-white flex flex-col overflow-hidden">
       {showRegModal && <RegisterModal onClose={() => setShowRegModal(false)} />}
       {showLoginModal && (
         <LoginModal onClose={() => setShowLoginModal(false)} onSuccess={login} onRegisterClick={() => setShowRegModal(true)} />
@@ -119,10 +119,14 @@ const Index = () => {
         />
       )}
 
-      <Navbar onRegisterClick={() => setShowRegModal(true)} onLoginClick={() => setShowLoginModal(true)} user={user} />
+      {/* Navbar — только на десктопе */}
+      <div className="hidden lg:block">
+        <Navbar onRegisterClick={() => setShowRegModal(true)} onLoginClick={() => setShowLoginModal(true)} user={user} />
+      </div>
 
-      <div className="flex flex-1 min-h-0">
-        <div className="flex w-[72px] bg-[#202225] flex-col items-center py-3 gap-2 flex-shrink-0">
+      <div className="flex flex-1 min-h-0 overflow-hidden">
+        {/* Левая иконка-панель — только на десктопе */}
+        <div className="hidden lg:flex w-[72px] bg-[#202225] flex-col items-center py-3 gap-2 flex-shrink-0">
           <div className="w-12 h-12 bg-[#5865f2] rounded-2xl flex items-center justify-center">
             <Gamepad2 className="w-6 h-6 text-white" />
           </div>
@@ -143,7 +147,7 @@ const Index = () => {
           )}
         </div>
 
-        <div className="flex-1 flex flex-col lg:flex-row min-w-0">
+        <div className="flex-1 flex flex-col lg:flex-row min-w-0 min-h-0">
           <ChannelsSidebar
             mobileSidebarOpen={mobileSidebarOpen}
             onClose={() => setMobileSidebarOpen(false)}
@@ -168,6 +172,58 @@ const Index = () => {
             roomName={activeRoomName}
           />
         </div>
+      </div>
+
+      {/* Мобильная нижняя навигация */}
+      <div className="lg:hidden flex-shrink-0 bg-[#202225] border-t border-[#111214] flex items-center justify-around px-2 safe-bottom" style={{ paddingBottom: "env(safe-area-inset-bottom)" }}>
+        <button
+          onClick={() => setMobileSidebarOpen(true)}
+          className="flex flex-col items-center gap-0.5 py-2 px-4 text-[#b9bbbe] active:text-white min-w-[56px] min-h-[56px] justify-center"
+        >
+          <Icon name="Hash" size={22} />
+          <span className="text-[10px]">Каналы</span>
+        </button>
+
+        {user ? (
+          <button
+            onClick={handleOpenDM}
+            className="relative flex flex-col items-center gap-0.5 py-2 px-4 text-[#b9bbbe] active:text-white min-w-[56px] min-h-[56px] justify-center"
+          >
+            <Icon name="MessageCircle" size={22} />
+            <span className="text-[10px]">Сообщения</span>
+            {unreadCount > 0 && (
+              <span className="absolute top-1.5 right-2 min-w-[16px] h-[16px] bg-[#ed4245] text-white text-[9px] font-bold rounded-full flex items-center justify-center px-0.5 leading-none">
+                {unreadCount > 99 ? "99+" : unreadCount}
+              </span>
+            )}
+          </button>
+        ) : (
+          <button
+            onClick={() => setShowLoginModal(true)}
+            className="flex flex-col items-center gap-0.5 py-2 px-4 text-[#b9bbbe] active:text-white min-w-[56px] min-h-[56px] justify-center"
+          >
+            <Icon name="LogIn" size={22} />
+            <span className="text-[10px]">Войти</span>
+          </button>
+        )}
+
+        {user ? (
+          <button
+            onClick={() => setShowSettings(true)}
+            className="flex flex-col items-center gap-0.5 py-2 px-4 text-[#b9bbbe] active:text-white min-w-[56px] min-h-[56px] justify-center"
+          >
+            <Icon name="Settings" size={22} />
+            <span className="text-[10px]">Профиль</span>
+          </button>
+        ) : (
+          <button
+            onClick={() => setShowRegModal(true)}
+            className="flex flex-col items-center gap-0.5 py-2 px-4 text-[#5865f2] min-w-[56px] min-h-[56px] justify-center"
+          >
+            <Icon name="UserPlus" size={22} />
+            <span className="text-[10px] font-medium">Регистрация</span>
+          </button>
+        )}
       </div>
     </div>
   );

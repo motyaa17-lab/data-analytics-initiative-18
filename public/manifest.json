@@ -28,6 +28,12 @@
       "sizes": "1200x630",
       "type": "image/png",
       "form_factor": "wide"
+    },
+    {
+      "src": "https://cdn.poehali.dev/projects/db0cd6e2-c342-4b12-8217-0c08600da821/files/b68f880d-93ed-4f0d-ab05-6f5bcf14efe5.jpg",
+      "sizes": "1024x1024",
+      "type": "image/jpeg",
+      "form_factor": "narrow"
     }
   ],
   "categories": ["social", "games", "entertainment"]
