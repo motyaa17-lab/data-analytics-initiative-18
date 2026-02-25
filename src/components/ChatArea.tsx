@@ -215,28 +215,38 @@ const ChatArea = ({ onSidebarOpen, onRegisterClick, user, token, channel, roomId
         </div>
 
         {/* Messages */}
-        <div className="flex-1 overflow-y-auto p-3 space-y-3">
-          {messages.length === 0 && (
-            <div className="text-center text-[#72767d] text-sm py-12">
-              Сообщений пока нет. Будь первым!
-            </div>
-          )}
-          {messages.map((msg) => (
-            <div key={msg.id} className="flex gap-3 hover:bg-[#32353b] rounded px-2 py-1 -mx-2">
-              <div className={`w-9 h-9 bg-gradient-to-r ${getAvatarColor(msg.username)} rounded-full flex items-center justify-center flex-shrink-0 mt-0.5`}>
-                <span className="text-white text-sm font-semibold">{msg.username[0].toUpperCase()}</span>
+        <div className="relative flex-1 min-h-0">
+          <div ref={scrollContainerRef} className="h-full overflow-y-auto p-3 space-y-3">
+            {messages.length === 0 && (
+              <div className="text-center text-[#72767d] text-sm py-12">
+                Сообщений пока нет. Будь первым!
               </div>
-              <div className="flex-1 min-w-0">
-                <div className="flex items-baseline gap-2 mb-0.5">
-                  <span className="text-white font-medium text-sm">{msg.username}</span>
-                  {msg.favorite_game && <span className="text-[#5865f2] text-xs">🎮 {msg.favorite_game}</span>}
-                  <span className="text-[#72767d] text-xs">{formatTime(msg.created_at)}</span>
+            )}
+            {messages.map((msg) => (
+              <div key={msg.id} className="flex gap-3 hover:bg-[#32353b] rounded px-2 py-1 -mx-2">
+                <div className={`w-9 h-9 bg-gradient-to-r ${getAvatarColor(msg.username)} rounded-full flex items-center justify-center flex-shrink-0 mt-0.5`}>
+                  <span className="text-white text-sm font-semibold">{msg.username[0].toUpperCase()}</span>
                 </div>
-                <p className="text-[#dcddde] text-sm break-words">{msg.content}</p>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-baseline gap-2 mb-0.5">
+                    <span className="text-white font-medium text-sm">{msg.username}</span>
+                    {msg.favorite_game && <span className="text-[#5865f2] text-xs">🎮 {msg.favorite_game}</span>}
+                    <span className="text-[#72767d] text-xs">{formatTime(msg.created_at)}</span>
+                  </div>
+                  <p className="text-[#dcddde] text-sm break-words">{msg.content}</p>
+                </div>
               </div>
-            </div>
-          ))}
-          <div ref={bottomRef} />
+            ))}
+            <div ref={bottomRef} />
+          </div>
+          {newMsgCount > 0 && (
+            <button
+              onClick={scrollToBottom}
+              className="absolute bottom-3 left-1/2 -translate-x-1/2 flex items-center gap-1.5 bg-[#5865f2] hover:bg-[#4752c4] text-white text-xs font-medium px-3 py-1.5 rounded-full shadow-lg transition-colors"
+            >
+              ↓ {newMsgCount} {newMsgCount === 1 ? "новое сообщение" : "новых сообщения"}
+            </button>
+          )}
         </div>
 
         {/* Input */}

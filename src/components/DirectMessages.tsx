@@ -85,8 +85,21 @@ export default function DirectMessages({ user, token, onClose, seenKey = "frikor
   const [messages, setMessages] = useState<DMessage[]>([]);
   const [msgText, setMsgText] = useState("");
   const [loading, setLoading] = useState(false);
+  const [newMsgCount, setNewMsgCount] = useState(0);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const isAtBottom = () => {
+    const el = scrollContainerRef.current;
+    if (!el) return true;
+    return el.scrollHeight - el.scrollTop - el.clientHeight < 80;
+  };
+
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    setNewMsgCount(0);
+  };
 
   const loadFriends = async () => {
     const data = await apiFriends("list", token);
@@ -117,17 +130,32 @@ export default function DirectMessages({ user, token, onClose, seenKey = "frikor
 
   useEffect(() => {
     if (!activeFriend) return;
-    const load = async () => {
+    setNewMsgCount(0);
+    const load = async (isFirst = false) => {
       const data = await apiGetDM(activeFriend.id, token);
       if (data.messages) {
-        setMessages(data.messages);
+        setMessages(prev => {
+          const msgs: DMessage[] = data.messages;
+          if (!isFirst && msgs.length > prev.length) {
+            const newOnes = msgs.slice(prev.length).filter((m: DMessage) => m.username !== user.username);
+            if (newOnes.length > 0 && !isAtBottom()) {
+              setNewMsgCount(c => c + newOnes.length);
+            } else if (isAtBottom()) {
+              setTimeout(() => messagesEndRef.current?.scrollIntoView({ behavior: "smooth" }), 50);
+            }
+          }
+          return msgs;
+        });
         if (data.messages.length > 0) {
           markSeen(seenKey, activeFriend.id, data.messages[data.messages.length - 1].id);
         }
+        if (isFirst) {
+          setTimeout(() => messagesEndRef.current?.scrollIntoView({ behavior: "instant" as ScrollBehavior }), 50);
+        }
       }
     };
-    load();
-    pollRef.current = setInterval(load, 3000);
+    load(true);
+    pollRef.current = setInterval(() => load(false), 3000);
     return () => { if (pollRef.current) clearInterval(pollRef.current); };
   }, [activeFriend]);
 
@@ -198,31 +226,41 @@ export default function DirectMessages({ user, token, onClose, seenKey = "frikor
             </button>
           </div>
 
-          <div className="flex-1 overflow-y-auto px-4 py-3 flex flex-col gap-2 min-h-0">
-            {messages.length === 0 && (
-              <div className="text-center text-[#72767d] text-sm mt-8">
-                Начни переписку с {activeFriend.username}
-              </div>
-            )}
-            {messages.map(msg => {
-              const isMe = msg.username === user.username;
-              return (
-                <div key={msg.id} className={`flex gap-2 ${isMe ? "flex-row-reverse" : ""}`}>
-                  <div
-                    className="w-7 h-7 rounded-full flex items-center justify-center text-white font-bold text-xs flex-shrink-0 self-end"
-                    style={{ background: avatarColor(msg.username) }}
-                  >
-                    {msg.username[0].toUpperCase()}
-                  </div>
-                  <div className={`max-w-[75%] px-3 py-2 rounded-2xl text-sm break-words ${
-                    isMe ? "bg-[#5865f2] text-white rounded-br-sm" : "bg-[#40444b] text-[#dcddde] rounded-bl-sm"
-                  }`}>
-                    {msg.content}
-                  </div>
+          <div className="relative flex-1 min-h-0">
+            <div ref={scrollContainerRef} className="h-full overflow-y-auto px-4 py-3 flex flex-col gap-2">
+              {messages.length === 0 && (
+                <div className="text-center text-[#72767d] text-sm mt-8">
+                  Начни переписку с {activeFriend.username}
                 </div>
-              );
-            })}
-            <div ref={messagesEndRef} />
+              )}
+              {messages.map(msg => {
+                const isMe = msg.username === user.username;
+                return (
+                  <div key={msg.id} className={`flex gap-2 ${isMe ? "flex-row-reverse" : ""}`}>
+                    <div
+                      className="w-7 h-7 rounded-full flex items-center justify-center text-white font-bold text-xs flex-shrink-0 self-end"
+                      style={{ background: avatarColor(msg.username) }}
+                    >
+                      {msg.username[0].toUpperCase()}
+                    </div>
+                    <div className={`max-w-[75%] px-3 py-2 rounded-2xl text-sm break-words ${
+                      isMe ? "bg-[#5865f2] text-white rounded-br-sm" : "bg-[#40444b] text-[#dcddde] rounded-bl-sm"
+                    }`}>
+                      {msg.content}
+                    </div>
+                  </div>
+                );
+              })}
+              <div ref={messagesEndRef} />
+            </div>
+            {newMsgCount > 0 && (
+              <button
+                onClick={scrollToBottom}
+                className="absolute bottom-3 left-1/2 -translate-x-1/2 flex items-center gap-1.5 bg-[#5865f2] hover:bg-[#4752c4] text-white text-xs font-medium px-3 py-1.5 rounded-full shadow-lg transition-colors"
+              >
+                ↓ {newMsgCount} {newMsgCount === 1 ? "новое сообщение" : "новых сообщения"}
+              </button>
+            )}
           </div>
 
           <div className="px-4 py-3 bg-[#40444b] mx-4 mb-4 rounded-lg flex gap-2 items-center">
