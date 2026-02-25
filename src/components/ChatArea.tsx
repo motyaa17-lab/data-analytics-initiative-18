@@ -176,36 +176,16 @@ const ChatArea = ({ onSidebarOpen, onRegisterClick, user, token, channel, roomId
   const handleReact = async (msgId: number, emoji: string) => {
     if (!token || !user) return;
     setEmojiPickerFor(null);
-    const msg = messages.find(m => m.id === msgId);
-    const existing = msg?.reactions?.find(r => r.emoji === emoji);
-    const alreadyReacted = existing?.users.includes((user as unknown as { id: number }).id);
-
-    if (alreadyReacted) {
-      await api.reactions.remove(token, msgId, emoji);
-      setMessages(prev => prev.map(m => {
-        if (m.id !== msgId) return m;
-        const newReactions = (m.reactions || []).map(r => {
-          if (r.emoji !== emoji) return r;
-          const newUsers = r.users.filter(uid => uid !== (user as unknown as { id: number }).id);
-          return { ...r, count: newUsers.length, users: newUsers };
-        }).filter(r => r.count > 0);
-        return { ...m, reactions: newReactions };
-      }));
-    } else {
-      await api.reactions.add(token, msgId, emoji);
-      setMessages(prev => prev.map(m => {
-        if (m.id !== msgId) return m;
-        const reactions = [...(m.reactions || [])];
-        const idx = reactions.findIndex(r => r.emoji === emoji);
-        const uid = (user as unknown as { id: number }).id;
-        if (idx >= 0) {
-          reactions[idx] = { ...reactions[idx], count: reactions[idx].count + 1, users: [...reactions[idx].users, uid] };
-        } else {
-          reactions.push({ emoji, count: 1, users: [uid] });
-        }
-        return { ...m, reactions };
-      }));
-    }
+    const data = await api.reactions.add(token, msgId, emoji);
+    if (!data.ok) return;
+    setMessages(prev => prev.map(m => {
+      if (m.id !== msgId) return m;
+      const others = (m.reactions || []).filter(r => r.emoji !== emoji);
+      const count = data.count as number;
+      const users = data.users as number[];
+      if (count > 0) return { ...m, reactions: [...others, { emoji, count, users }] };
+      return { ...m, reactions: others };
+    }));
   };
 
   const handleEnableNotif = async () => {

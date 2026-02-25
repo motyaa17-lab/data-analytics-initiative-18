@@ -60,7 +60,7 @@ def get_reactions(cur, schema, message_ids):
         f"SELECT message_id, emoji, COUNT(*) as cnt, "
         f"array_agg(user_id) as user_ids "
         f"FROM {schema}.message_reactions "
-        f"WHERE message_id IN ({ids_str}) "
+        f"WHERE message_id IN ({ids_str}) AND is_active=TRUE "
         f"GROUP BY message_id, emoji"
     )
     result = {}
@@ -200,39 +200,19 @@ def handler(event: dict, context) -> dict:
         emoji = body.get('emoji', '')
         if emoji not in VALID_EMOJI: return err(400, 'Недопустимый эмодзи')
         if not msg_id: return err(400, 'Укажи msg_id')
-        cur.execute(f"SELECT id FROM {schema}.messages WHERE id={msg_id}")
-        if not cur.fetchone(): return err(404, 'Сообщение не найдено')
-        cur.execute(f"SELECT id FROM {schema}.message_reactions WHERE message_id={msg_id} AND user_id={uid} AND emoji='{emoji}'")
+        cur.execute(f"SELECT id, is_active FROM {schema}.message_reactions WHERE message_id={msg_id} AND user_id={uid} AND emoji='{emoji}'")
         existing = cur.fetchone()
         if existing:
-            cur.execute(f"UPDATE {schema}.message_reactions SET id=id WHERE id={existing[0]}")
-            cur.execute(f"SELECT COUNT(*) FROM {schema}.message_reactions WHERE message_id={msg_id} AND emoji='{emoji}'")
-            cnt = cur.fetchone()[0]
-            cur.execute(f"SELECT array_agg(user_id) FROM {schema}.message_reactions WHERE message_id={msg_id} AND emoji='{emoji}'")
-            uids = cur.fetchone()[0] or []
-            return resp(200, {'ok': True, 'removed': False, 'count': cnt, 'users': uids})
+            new_active = not existing[1]
+            cur.execute(f"UPDATE {schema}.message_reactions SET is_active={'TRUE' if new_active else 'FALSE'} WHERE id={existing[0]}")
         else:
-            cur.execute(f"INSERT INTO {schema}.message_reactions(message_id,user_id,emoji) VALUES({msg_id},{uid},'{emoji}')")
-            cur.execute(f"SELECT COUNT(*) FROM {schema}.message_reactions WHERE message_id={msg_id} AND emoji='{emoji}'")
-            cnt = cur.fetchone()[0]
-            cur.execute(f"SELECT array_agg(user_id) FROM {schema}.message_reactions WHERE message_id={msg_id} AND emoji='{emoji}'")
-            uids = cur.fetchone()[0] or []
-            return resp(200, {'ok': True, 'removed': False, 'count': cnt, 'users': uids})
-
-    if action == 'unreact' and method == 'POST':
-        user = get_user(cur, schema, token)
-        if not user: return err(401, 'Необходима авторизация')
-        uid = user[0]
-        msg_id = int(body.get('msg_id', 0))
-        emoji = body.get('emoji', '')
-        cur.execute(f"SELECT COUNT(*) FROM {schema}.message_reactions WHERE message_id={msg_id} AND user_id={uid} AND emoji='{emoji}'")
-        if cur.fetchone()[0] > 0:
-            cur.execute(f"UPDATE {schema}.message_reactions SET emoji=emoji WHERE message_id={msg_id} AND user_id={uid} AND emoji='{emoji}'")
-            cur.execute(f"SELECT id FROM {schema}.message_reactions WHERE message_id={msg_id} AND user_id={uid} AND emoji='{emoji}'")
-            rid = cur.fetchone()
-            if rid:
-                cur.execute(f"UPDATE {schema}.message_reactions SET created_at=NULL WHERE id={rid[0]}")
-        return resp(200, {'ok': True, 'removed': True})
+            cur.execute(f"INSERT INTO {schema}.message_reactions(message_id,user_id,emoji,is_active) VALUES({msg_id},{uid},'{emoji}',TRUE)")
+            new_active = True
+        cur.execute(f"SELECT COUNT(*) FROM {schema}.message_reactions WHERE message_id={msg_id} AND emoji='{emoji}' AND is_active=TRUE")
+        cnt = cur.fetchone()[0]
+        cur.execute(f"SELECT array_agg(user_id) FROM {schema}.message_reactions WHERE message_id={msg_id} AND emoji='{emoji}' AND is_active=TRUE")
+        uids = cur.fetchone()[0] or []
+        return resp(200, {'ok': True, 'added': new_active, 'count': cnt, 'users': uids})
 
     # ─── ROOMS ───────────────────────────────────────────────
 

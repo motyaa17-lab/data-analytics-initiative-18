@@ -1,0 +1,1 @@
+ALTER TABLE t_p75051746_data_analytics_initi.message_reactions ADD COLUMN IF NOT EXISTS is_active BOOLEAN NOT NULL DEFAULT TRUE;
