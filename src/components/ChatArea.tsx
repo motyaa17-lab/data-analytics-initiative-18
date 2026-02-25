@@ -82,14 +82,41 @@ const ChatArea = ({ onSidebarOpen, onRegisterClick, user, token, channel, roomId
   const [notifEnabled, setNotifEnabled] = useState(
     "Notification" in window && Notification.permission === "granted"
   );
+  const [newMsgCount, setNewMsgCount] = useState(0);
   const lastMsgIdRef = useRef<number | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+
+  const isAtBottom = () => {
+    const el = scrollContainerRef.current;
+    if (!el) return true;
+    return el.scrollHeight - el.scrollTop - el.clientHeight < 80;
+  };
+
+  const scrollToBottom = () => {
+    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+    setNewMsgCount(0);
+  };
 
   const fetchMessages = useCallback(async () => {
     const data = await api.messages.get(channel, token, roomId);
     if (Array.isArray(data.messages)) {
       const msgs = data.messages as Message[];
-      setMessages(msgs);
+      setMessages(prev => {
+        if (prev.length > 0 && msgs.length > prev.length) {
+          const added = msgs.length - prev.length;
+          const newOnes = msgs.slice(prev.length);
+          const fromOthers = newOnes.filter(m => m.username !== user?.username).length;
+          if (fromOthers > 0 && !isAtBottom()) {
+            setNewMsgCount(c => c + fromOthers);
+          } else if (isAtBottom()) {
+            setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: "smooth" }), 50);
+          }
+        } else if (prev.length === 0) {
+          setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: "instant" as ScrollBehavior }), 50);
+        }
+        return msgs;
+      });
       if (msgs.length > 0) {
         const last = msgs[msgs.length - 1];
         if (lastMsgIdRef.current !== null && last.id !== lastMsgIdRef.current && last.username !== user?.username) {
