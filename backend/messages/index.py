@@ -715,7 +715,7 @@ def handler(event: dict, context) -> dict:
             if not cur.fetchone(): return err(403, 'Не друзья')
             cur.execute(f"UPDATE {schema}.users SET last_seen=now() WHERE id={uid}")
             cur.execute(
-                f"SELECT dm.id, dm.content, dm.created_at, u.username, dm.is_removed FROM {schema}.direct_messages dm "
+                f"SELECT dm.id, dm.content, dm.created_at, u.username, dm.is_removed, dm.voice_url FROM {schema}.direct_messages dm "
                 f"JOIN {schema}.users u ON u.id=dm.sender_id "
                 f"WHERE (dm.sender_id={uid} AND dm.receiver_id={other_id}) OR (dm.sender_id={other_id} AND dm.receiver_id={uid}) "
                 f"ORDER BY dm.created_at ASC LIMIT 100"
@@ -727,14 +727,16 @@ def handler(event: dict, context) -> dict:
                     'content': r[1] if not r[4] else '',
                     'created_at': str(r[2]),
                     'username': r[3],
-                    'is_removed': bool(r[4])
+                    'is_removed': bool(r[4]),
+                    'voice_url': r[5] or ''
                 })
             return resp(200, {'messages': msgs})
 
         if method == 'POST':
             other_id = int(body.get('to', 0))
             content = sanitize(body.get('content') or '')
-            if not content: return err(400, 'Пустое сообщение')
+            voice_url = body.get('voice_url') or ''
+            if not content and not voice_url: return err(400, 'Пустое сообщение')
             if len(content) > 2000: return err(400, 'Максимум 2000 символов')
             if rate_limit(cur, schema, f'dm:{uid}', 10, 10): return err(429, 'Слишком быстро')
             cur.execute(
@@ -744,9 +746,10 @@ def handler(event: dict, context) -> dict:
             )
             if not cur.fetchone(): return err(403, 'Не друзья')
             sc = content.replace("'","''")
-            cur.execute(f"INSERT INTO {schema}.direct_messages(sender_id,receiver_id,content) VALUES({uid},{other_id},'{sc}') RETURNING id,created_at")
+            voice_val = f"'{voice_url.replace(chr(39), '')}'" if voice_url else 'NULL'
+            cur.execute(f"INSERT INTO {schema}.direct_messages(sender_id,receiver_id,content,voice_url) VALUES({uid},{other_id},'{sc}',{voice_val}) RETURNING id,created_at")
             msg_id, created_at = cur.fetchone()
-            return resp(200, {'ok':True,'message':{'id':msg_id,'content':content,'created_at':str(created_at),'username':user[1],'is_removed':False}})
+            return resp(200, {'ok':True,'message':{'id':msg_id,'content':content,'created_at':str(created_at),'username':user[1],'is_removed':False,'voice_url':voice_url}})
 
     # ─── DELETE DM ────────────────────────────────────────────
 

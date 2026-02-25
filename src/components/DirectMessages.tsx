@@ -152,6 +152,23 @@ export default function DirectMessages({ user, token, onClose, seenKey = "frikor
     if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSend(); }
   };
 
+  const handleVoiceSendDM = async (blob: Blob, ext: string) => {
+    if (!activeFriend) return;
+    const arrayBuf = await blob.arrayBuffer();
+    const bytes = new Uint8Array(arrayBuf);
+    let binary = "";
+    bytes.forEach(b => binary += String.fromCharCode(b));
+    const b64 = btoa(binary);
+    const upRes = await fetch(`${BASE}?action=upload_voice`, {
+      method: "POST",
+      headers: authHeaders(token),
+      body: JSON.stringify({ audio: b64, ext }),
+    }).then(r => r.json());
+    if (!upRes.url) return;
+    const data = await apiSendDM(activeFriend.id, "", token, upRes.url);
+    if (data.message) setMessages(m => [...m, data.message]);
+  };
+
   if (activeFriend) {
     return (
       <DMChat
@@ -176,6 +193,7 @@ export default function DirectMessages({ user, token, onClose, seenKey = "frikor
         onSetProfileUsername={setProfileUsername}
         onDeleteDM={handleDeleteDM}
         setMessages={setMessages}
+        onVoiceSend={handleVoiceSendDM}
       />
     );
   }

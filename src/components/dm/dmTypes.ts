@@ -32,18 +32,18 @@ export async function apiGetDM(withId: number, token: string) {
   return res.json();
 }
 
-export async function apiSendDM(toId: number, content: string, token: string) {
+export async function apiSendDM(toId: number, content: string, token: string, voice_url?: string) {
   const res = await fetch(`${BASE}?action=dm`, {
     method: "POST",
     headers: authHeaders(token),
-    body: JSON.stringify({ to: toId, content }),
+    body: JSON.stringify({ to: toId, content, ...(voice_url ? { voice_url } : {}) }),
   });
   return res.json();
 }
 
 export interface Friend { id: number; username: string; favorite_game: string; }
 export interface FriendRequest { request_id: number; user_id: number; username: string; favorite_game: string; }
-export interface DMessage { id: number; content: string; created_at: string; username: string; is_removed?: boolean; edited?: boolean; }
+export interface DMessage { id: number; content: string; created_at: string; username: string; is_removed?: boolean; edited?: boolean; voice_url?: string; }
 
 export async function apiEditDM(msgId: number, content: string, token: string) {
   const res = await fetch(`${BASE}?action=edit_dm`, {

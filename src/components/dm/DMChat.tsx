@@ -3,6 +3,7 @@ import Icon from "@/components/ui/icon";
 import ProfileModal from "@/components/ProfileModal";
 import { Friend, DMessage, DMContextMenu, avatarColor, BASE, authHeaders, apiEditDM } from "@/components/dm/dmTypes";
 import { User } from "@/hooks/useAuth";
+import VoiceMessage from "@/components/chat/VoiceMessage";
 
 interface Props {
   user: User;
@@ -26,17 +27,76 @@ interface Props {
   onSetProfileUsername: (u: string | null) => void;
   onDeleteDM: (msgId: number) => void;
   setMessages: React.Dispatch<React.SetStateAction<DMessage[]>>;
+  onVoiceSend: (blob: Blob, ext: string) => void;
 }
 
 export default function DMChat({
   user, token, uid, activeFriend, messages, msgText, newMsgCount,
   dmContextMenu, profileUsername, scrollContainerRef, messagesEndRef,
   onBack, onClose, onMsgTextChange, onSend, onKey, onScrollToBottom,
-  onSetContextMenu, onSetProfileUsername, onDeleteDM, setMessages,
+  onSetContextMenu, onSetProfileUsername, onDeleteDM, setMessages, onVoiceSend,
 }: Props) {
   const [editingMsg, setEditingMsg] = useState<{ id: number; content: string } | null>(null);
   const [editText, setEditText] = useState("");
   const editInputRef = useRef<HTMLInputElement>(null);
+  const mediaRef = useRef<MediaRecorder | null>(null);
+  const chunksRef = useRef<Blob[]>([]);
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const [recording, setRecording] = useState(false);
+  const [recSeconds, setRecSeconds] = useState(0);
+
+  useEffect(() => {
+    return () => {
+      if (timerRef.current) clearInterval(timerRef.current);
+      if (mediaRef.current && mediaRef.current.state !== "inactive") mediaRef.current.stop();
+    };
+  }, []);
+
+  const startRecording = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mimeType = MediaRecorder.isTypeSupported("audio/webm;codecs=opus")
+        ? "audio/webm;codecs=opus"
+        : MediaRecorder.isTypeSupported("audio/ogg;codecs=opus")
+          ? "audio/ogg;codecs=opus"
+          : "audio/webm";
+      const mr = new MediaRecorder(stream, { mimeType });
+      chunksRef.current = [];
+      mr.ondataavailable = e => { if (e.data.size > 0) chunksRef.current.push(e.data); };
+      mr.onstop = () => {
+        stream.getTracks().forEach(t => t.stop());
+        const ext = mimeType.includes("ogg") ? "ogg" : "webm";
+        const blob = new Blob(chunksRef.current, { type: mimeType });
+        if (blob.size > 0) onVoiceSend(blob, ext);
+        setRecording(false);
+        setRecSeconds(0);
+        if (timerRef.current) clearInterval(timerRef.current);
+      };
+      mr.start(200);
+      mediaRef.current = mr;
+      setRecording(true);
+      setRecSeconds(0);
+      timerRef.current = setInterval(() => setRecSeconds(s => s + 1), 1000);
+    } catch {
+      alert("Нет доступа к микрофону");
+    }
+  };
+
+  const stopRecording = () => {
+    if (mediaRef.current && mediaRef.current.state !== "inactive") mediaRef.current.stop();
+  };
+
+  const cancelRecording = () => {
+    if (timerRef.current) clearInterval(timerRef.current);
+    if (mediaRef.current && mediaRef.current.state !== "inactive") {
+      mediaRef.current.onstop = () => { mediaRef.current!.stream?.getTracks().forEach(t => t.stop()); };
+      mediaRef.current.stop();
+    }
+    setRecording(false);
+    setRecSeconds(0);
+  };
+
+  const fmtTime = (s: number) => `${Math.floor(s / 60)}:${(s % 60).toString().padStart(2, "0")}`;
 
   useEffect(() => {
     if (editingMsg) editInputRef.current?.focus();
@@ -151,6 +211,8 @@ export default function DMChat({
                           <Icon name="X" size={14} />
                         </button>
                       </div>
+                    ) : msg.voice_url ? (
+                      <VoiceMessage url={msg.voice_url} />
                     ) : (
                       <div className={`px-3 py-2 rounded-2xl text-sm break-words ${
                         isMe ? "bg-[#5865f2] text-white rounded-br-sm" : "bg-[#40444b] text-[#dcddde] rounded-bl-sm"
@@ -185,21 +247,38 @@ export default function DMChat({
         </div>
 
         {/* Input */}
-        <div className="px-4 py-3 bg-[#40444b] mx-4 mb-4 rounded-lg flex gap-2 items-center">
-          <input
-            className="flex-1 bg-transparent text-white placeholder-[#72767d] text-sm outline-none"
-            placeholder={`Сообщение для ${activeFriend.username}...`}
-            value={msgText}
-            onChange={e => onMsgTextChange(e.target.value)}
-            onKeyDown={onKey}
-          />
-          <button
-            className="text-[#b9bbbe] hover:text-white transition-colors disabled:opacity-40"
-            onClick={onSend}
-            disabled={!msgText.trim()}
-          >
-            <Icon name="Send" size={16} />
-          </button>
+        <div className="mx-4 mb-4">
+          {recording ? (
+            <div className="px-3 py-3 bg-[#40444b] rounded-lg flex items-center gap-3">
+              <div className="w-2 h-2 rounded-full bg-[#ed4245] animate-pulse flex-shrink-0" />
+              <span className="text-white text-sm font-mono flex-1">{fmtTime(recSeconds)}</span>
+              <button onClick={cancelRecording} className="text-[#72767d] hover:text-[#ed4245] transition-colors p-1" title="Отмена">
+                <Icon name="X" size={18} />
+              </button>
+              <button onClick={stopRecording} className="w-8 h-8 rounded-full bg-[#ed4245] hover:bg-[#c03537] flex items-center justify-center transition-colors" title="Отправить">
+                <Icon name="Send" size={14} className="text-white" />
+              </button>
+            </div>
+          ) : (
+            <div className="px-3 py-3 bg-[#40444b] rounded-lg flex gap-2 items-center">
+              <input
+                className="flex-1 bg-transparent text-white placeholder-[#72767d] text-sm outline-none"
+                placeholder={`Сообщение для ${activeFriend.username}...`}
+                value={msgText}
+                onChange={e => onMsgTextChange(e.target.value)}
+                onKeyDown={onKey}
+              />
+              {msgText.trim() ? (
+                <button className="text-[#b9bbbe] hover:text-white transition-colors" onClick={onSend}>
+                  <Icon name="Send" size={16} />
+                </button>
+              ) : (
+                <button className="text-[#b9bbbe] hover:text-white transition-colors" onClick={startRecording} title="Голосовое">
+                  <Icon name="Mic" size={16} />
+                </button>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Context menu */}
