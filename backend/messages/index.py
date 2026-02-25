@@ -487,7 +487,13 @@ def handler(event: dict, context) -> dict:
         cur.execute(f"SELECT COUNT(*) FROM {schema}.error_logs WHERE created_at > now()-interval '24 hours'"); e24 = cur.fetchone()[0]
         cur.execute(f"SELECT COUNT(*) FROM {schema}.users WHERE created_at > now()-interval '24 hours'"); nu = cur.fetchone()[0]
         cur.execute(f"SELECT COUNT(*) FROM {schema}.messages WHERE created_at > now()-interval '24 hours'"); m24 = cur.fetchone()[0]
-        return resp(200, {'stats':{'total_users':tu,'banned_users':bu,'total_messages':tm,'total_rooms':tr,'errors_24h':e24,'new_users_24h':nu,'messages_24h':m24}})
+        cur.execute("""
+            SELECT 
+                pg_size_pretty(sum(pg_total_relation_size(schemaname||'.'||tablename))) AS pretty,
+                sum(pg_total_relation_size(schemaname||'.'||tablename)) AS bytes
+            FROM pg_tables WHERE schemaname = %s
+        """, (schema,)); row = cur.fetchone(); db_size = row[0] if row else '?'; db_bytes = int(row[1]) if row and row[1] else 0
+        return resp(200, {'stats':{'total_users':tu,'banned_users':bu,'total_messages':tm,'total_rooms':tr,'errors_24h':e24,'new_users_24h':nu,'messages_24h':m24,'db_size':db_size,'db_bytes':db_bytes}})
 
     if action == 'admin_logs' and method == 'GET':
         user = get_user(cur, schema, token, require_admin=True)

@@ -168,6 +168,12 @@ const AdminPanel = ({ token, onClose }: AdminPanelProps) => {
                   <div className="text-white text-2xl font-bold">{val as number}</div>
                 </div>
               ))}
+              {stats.db_size && (
+                <div className="bg-[#36393f] rounded-lg p-3 col-span-2 sm:col-span-1">
+                  <div className="text-[#8e9297] text-xs mb-1">База данных</div>
+                  <div className="text-white text-2xl font-bold">{stats.db_size as string}</div>
+                </div>
+              )}
             </div>
           )}
 
