@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { Gamepad2 } from "lucide-react";
 import Navbar from "@/components/Navbar";
 import ChannelsSidebar from "@/components/ChannelsSidebar";
@@ -10,6 +10,16 @@ import DirectMessages from "@/components/DirectMessages";
 import { useAuth } from "@/hooks/useAuth";
 import Icon from "@/components/ui/icon";
 
+const BASE = "https://functions.poehali.dev/b1a16ec3-c9d7-4e46-bb90-e30137e5c534";
+const SEEN_KEY = "frikords_dm_seen";
+
+function getSeenMap(): Record<string, number> {
+  try { return JSON.parse(localStorage.getItem(SEEN_KEY) || "{}"); } catch { return {}; }
+}
+function setSeenMap(m: Record<string, number>) {
+  localStorage.setItem(SEEN_KEY, JSON.stringify(m));
+}
+
 const Index = () => {
   const { user, token, login, logout } = useAuth();
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
@@ -17,9 +27,54 @@ const Index = () => {
   const [showLoginModal, setShowLoginModal] = useState(false);
   const [showAdmin, setShowAdmin] = useState(false);
   const [showDM, setShowDM] = useState(false);
+  const [unreadCount, setUnreadCount] = useState(0);
   const [activeChannel, setActiveChannel] = useState("general");
   const [activeRoomId, setActiveRoomId] = useState<number | undefined>();
   const [activeRoomName, setActiveRoomName] = useState<string | undefined>();
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const checkUnread = useCallback(async () => {
+    if (!user || !token) return;
+    try {
+      const res = await fetch(`${BASE}?action=friends&sub=list`, {
+        headers: { "X-Authorization": `Bearer ${token}` },
+      });
+      const data = await res.json();
+      if (!data.friends) return;
+      const seen = getSeenMap();
+      let total = 0;
+      await Promise.all(
+        data.friends.map(async (f: { id: number }) => {
+          const r = await fetch(`${BASE}?action=dm&with=${f.id}`, {
+            headers: { "X-Authorization": `Bearer ${token}` },
+          });
+          const d = await r.json();
+          if (!d.messages?.length) return;
+          const lastId: number = d.messages[d.messages.length - 1].id;
+          const seenId: number = seen[String(f.id)] || 0;
+          const unread = d.messages.filter((m: { id: number; username: string }) => m.id > seenId && m.username !== user.username).length;
+          total += unread;
+        })
+      );
+      setUnreadCount(total);
+    } catch (_e) { /* ignore */ }
+  }, [user, token]);
+
+  useEffect(() => {
+    if (!user || !token) { setUnreadCount(0); return; }
+    checkUnread();
+    pollRef.current = setInterval(checkUnread, 10000);
+    return () => { if (pollRef.current) clearInterval(pollRef.current); };
+  }, [user, token, checkUnread]);
+
+  const handleOpenDM = () => {
+    setShowDM(true);
+  };
+
+  const handleCloseDM = () => {
+    setShowDM(false);
+    checkUnread();
+  };
 
   const handleChannelChange = (channel: string) => {
     setActiveChannel(channel);
@@ -39,7 +94,7 @@ const Index = () => {
         <LoginModal onClose={() => setShowLoginModal(false)} onSuccess={login} onRegisterClick={() => setShowRegModal(true)} />
       )}
       {showAdmin && token && <AdminPanel token={token} onClose={() => setShowAdmin(false)} />}
-      {showDM && user && token && <DirectMessages user={user} token={token} onClose={() => setShowDM(false)} />}
+      {showDM && user && token && <DirectMessages user={user} token={token} onClose={handleCloseDM} seenKey={SEEN_KEY} />}
 
       <Navbar onRegisterClick={() => setShowRegModal(true)} onLoginClick={() => setShowLoginModal(true)} user={user} />
 
@@ -51,11 +106,16 @@ const Index = () => {
           <div className="w-8 h-[2px] bg-[#36393f] rounded-full"></div>
           {user && (
             <button
-              className="w-12 h-12 bg-[#2f3136] hover:bg-[#5865f2] rounded-2xl flex items-center justify-center transition-all duration-200 group"
-              onClick={() => setShowDM(true)}
+              className="relative w-12 h-12 bg-[#2f3136] hover:bg-[#5865f2] rounded-2xl flex items-center justify-center transition-all duration-200 group"
+              onClick={handleOpenDM}
               title="Личные сообщения"
             >
               <Icon name="MessageCircle" size={22} className="text-[#b9bbbe] group-hover:text-white transition-colors" />
+              {unreadCount > 0 && (
+                <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] bg-[#ed4245] text-white text-[10px] font-bold rounded-full flex items-center justify-center px-1 leading-none">
+                  {unreadCount > 99 ? "99+" : unreadCount}
+                </span>
+              )}
             </button>
           )}
         </div>
@@ -72,7 +132,7 @@ const Index = () => {
             token={token}
             onLogout={logout}
             onAdminClick={() => setShowAdmin(true)}
-            onDMClick={() => setShowDM(true)}
+            onDMClick={handleOpenDM}
           />
           <ChatArea
             onSidebarOpen={() => setMobileSidebarOpen(true)}

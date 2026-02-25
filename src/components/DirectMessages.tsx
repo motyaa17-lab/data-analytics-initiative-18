@@ -60,14 +60,25 @@ interface Props {
   user: User;
   token: string;
   onClose: () => void;
+  seenKey?: string;
 }
 
 type Tab = "friends" | "requests" | "add";
 
-export default function DirectMessages({ user, token, onClose }: Props) {
+function getSeenMap(key: string): Record<string, number> {
+  try { return JSON.parse(localStorage.getItem(key) || "{}"); } catch { return {}; }
+}
+function markSeen(key: string, friendId: number, lastId: number) {
+  const m = getSeenMap(key);
+  m[String(friendId)] = lastId;
+  localStorage.setItem(key, JSON.stringify(m));
+}
+
+export default function DirectMessages({ user, token, onClose, seenKey = "frikords_dm_seen" }: Props) {
   const [tab, setTab] = useState<Tab>("friends");
   const [friends, setFriends] = useState<Friend[]>([]);
   const [requests, setRequests] = useState<FriendRequest[]>([]);
+  const [unreadPerFriend, setUnreadPerFriend] = useState<Record<number, number>>({});
   const [addUsername, setAddUsername] = useState("");
   const [addStatus, setAddStatus] = useState<string | null>(null);
   const [activeFriend, setActiveFriend] = useState<Friend | null>(null);
@@ -79,7 +90,19 @@ export default function DirectMessages({ user, token, onClose }: Props) {
 
   const loadFriends = async () => {
     const data = await apiFriends("list", token);
-    if (data.friends) setFriends(data.friends);
+    if (!data.friends) return;
+    setFriends(data.friends);
+    const seen = getSeenMap(seenKey);
+    const counts: Record<number, number> = {};
+    await Promise.all(
+      data.friends.map(async (f: Friend) => {
+        const d = await apiGetDM(f.id, token);
+        if (!d.messages?.length) return;
+        const seenId = seen[String(f.id)] || 0;
+        counts[f.id] = d.messages.filter((m: DMessage) => m.id > seenId && m.username !== user.username).length;
+      })
+    );
+    setUnreadPerFriend(counts);
   };
 
   const loadRequests = async () => {
@@ -96,7 +119,12 @@ export default function DirectMessages({ user, token, onClose }: Props) {
     if (!activeFriend) return;
     const load = async () => {
       const data = await apiGetDM(activeFriend.id, token);
-      if (data.messages) setMessages(data.messages);
+      if (data.messages) {
+        setMessages(data.messages);
+        if (data.messages.length > 0) {
+          markSeen(seenKey, activeFriend.id, data.messages[data.messages.length - 1].id);
+        }
+      }
     };
     load();
     pollRef.current = setInterval(load, 3000);
@@ -265,27 +293,43 @@ export default function DirectMessages({ user, token, onClose }: Props) {
                   У тебя пока нет друзей.<br />Добавь кого-нибудь!
                 </div>
               )}
-              {friends.map(f => (
-                <button
-                  key={f.id}
-                  className="w-full flex items-center gap-3 px-3 py-2.5 rounded-md hover:bg-[#40444b] transition-colors text-left"
-                  onClick={() => setActiveFriend(f)}
-                >
-                  <div
-                    className="w-9 h-9 rounded-full flex items-center justify-center text-white font-bold text-sm flex-shrink-0"
-                    style={{ background: avatarColor(f.username) }}
+              {friends.map(f => {
+                const unread = unreadPerFriend[f.id] || 0;
+                return (
+                  <button
+                    key={f.id}
+                    className="w-full flex items-center gap-3 px-3 py-2.5 rounded-md hover:bg-[#40444b] transition-colors text-left"
+                    onClick={() => {
+                      setActiveFriend(f);
+                      setUnreadPerFriend(prev => ({ ...prev, [f.id]: 0 }));
+                    }}
                   >
-                    {f.username[0].toUpperCase()}
-                  </div>
-                  <div className="min-w-0">
-                    <div className="text-white text-sm font-medium truncate">{f.username}</div>
-                    {f.favorite_game && (
-                      <div className="text-[#b9bbbe] text-xs truncate">{f.favorite_game}</div>
-                    )}
-                  </div>
-                  <Icon name="MessageCircle" size={16} className="ml-auto text-[#72767d] flex-shrink-0" />
-                </button>
-              ))}
+                    <div className="relative flex-shrink-0">
+                      <div
+                        className="w-9 h-9 rounded-full flex items-center justify-center text-white font-bold text-sm"
+                        style={{ background: avatarColor(f.username) }}
+                      >
+                        {f.username[0].toUpperCase()}
+                      </div>
+                      {unread > 0 && (
+                        <span className="absolute -top-1 -right-1 min-w-[16px] h-[16px] bg-[#ed4245] text-white text-[9px] font-bold rounded-full flex items-center justify-center px-0.5 leading-none">
+                          {unread > 99 ? "99+" : unread}
+                        </span>
+                      )}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className={`text-sm font-medium truncate ${unread > 0 ? "text-white" : "text-[#dcddde]"}`}>{f.username}</div>
+                      {f.favorite_game && (
+                        <div className="text-[#b9bbbe] text-xs truncate">{f.favorite_game}</div>
+                      )}
+                    </div>
+                    {unread > 0
+                      ? <span className="ml-auto min-w-[20px] h-5 bg-[#ed4245] text-white text-[10px] font-bold rounded-full flex items-center justify-center px-1 flex-shrink-0">{unread}</span>
+                      : <Icon name="MessageCircle" size={16} className="ml-auto text-[#72767d] flex-shrink-0" />
+                    }
+                  </button>
+                );
+              })}
             </div>
           )}
 
