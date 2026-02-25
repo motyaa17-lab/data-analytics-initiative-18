@@ -41,10 +41,19 @@ export const CHANNEL_LABELS: Record<string, string> = {
 export const EMOJI_LIST = ["👍", "❤️", "😂", "😮", "😢", "🔥", "👎", "🎮"];
 
 export function avatarBg(name: string) {
-  const colors = ["#5865f2","#eb459e","#ed4245","#57f287","#1abc9c","#3498db","#e91e63","#f39c12"];
+  const gradients = [
+    "linear-gradient(135deg, #7c3aed, #3b82f6)",
+    "linear-gradient(135deg, #6d28d9, #2563eb)",
+    "linear-gradient(135deg, #8b5cf6, #60a5fa)",
+    "linear-gradient(135deg, #9333ea, #3b82f6)",
+    "linear-gradient(135deg, #7e22ce, #1d4ed8)",
+    "linear-gradient(135deg, #a855f7, #38bdf8)",
+    "linear-gradient(135deg, #6366f1, #06b6d4)",
+    "linear-gradient(135deg, #8b5cf6, #2dd4bf)",
+  ];
   let h = 0;
   for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) & 0xffffffff;
-  return colors[Math.abs(h) % colors.length];
+  return gradients[Math.abs(h) % gradients.length];
 }
 
 export function formatTime(iso: string) {
