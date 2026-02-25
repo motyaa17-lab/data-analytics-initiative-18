@@ -486,6 +486,55 @@ def handler(event: dict, context) -> dict:
         log(cur, schema, 'admin', f"{'Ban' if ban else 'Unban'} user {target_id}", user_id=uid_admin)
         return resp(200, {'ok':True,'banned':ban})
 
+    if action == 'admin_messages' and method == 'GET':
+        user = get_user(cur, schema, token, require_admin=True)
+        if not user: return err(403, 'Доступ запрещён')
+        channel = params.get('channel', 'general').replace("'","''")
+        room_id_str = params.get('room_id', '')
+        limit = min(int(params.get('limit', 50)), 200)
+        if room_id_str and str(room_id_str).isdigit():
+            room_id = int(room_id_str)
+            cur.execute(
+                f"SELECT m.id,m.content,m.created_at,u.username,m.is_removed,m.room_id,NULL as channel "
+                f"FROM {schema}.messages m JOIN {schema}.users u ON u.id=m.user_id "
+                f"WHERE m.room_id={room_id} ORDER BY m.created_at DESC LIMIT {limit}"
+            )
+        else:
+            cur.execute(
+                f"SELECT m.id,m.content,m.created_at,u.username,m.is_removed,m.room_id,m.channel "
+                f"FROM {schema}.messages m JOIN {schema}.users u ON u.id=m.user_id "
+                f"WHERE m.channel='{channel}' AND m.room_id IS NULL ORDER BY m.created_at DESC LIMIT {limit}"
+            )
+        rows = cur.fetchall()
+        msgs = [{'id':r[0],'content':r[1],'created_at':str(r[2]),'username':r[3],'is_removed':r[4],'room_id':r[5],'channel':r[6]} for r in rows]
+        return resp(200, {'messages': msgs})
+
+    if action == 'admin_clear' and method == 'POST':
+        user = get_user(cur, schema, token, require_admin=True)
+        if not user: return err(403, 'Доступ запрещён')
+        uid_admin = user[0]
+        channel = body.get('channel', '').replace("'","''")
+        room_id = body.get('room_id')
+        msg_id = body.get('msg_id')
+        if msg_id:
+            cur.execute(f"UPDATE {schema}.messages SET is_removed=TRUE WHERE id={int(msg_id)}")
+            count = cur.rowcount
+            log(cur, schema, 'admin', f"Deleted msg {msg_id}", user_id=uid_admin)
+            return resp(200, {'ok':True,'deleted':count})
+        elif room_id:
+            cur.execute(f"UPDATE {schema}.messages SET is_removed=TRUE WHERE room_id={int(room_id)} AND is_removed=FALSE")
+            count = cur.rowcount
+            log(cur, schema, 'admin', f"Cleared room {room_id} ({count} msgs)", user_id=uid_admin)
+            return resp(200, {'ok':True,'deleted':count})
+        elif channel:
+            if channel not in VALID_CHANNELS: return err(400, 'Неверный канал')
+            cur.execute(f"UPDATE {schema}.messages SET is_removed=TRUE WHERE channel='{channel}' AND room_id IS NULL AND is_removed=FALSE")
+            count = cur.rowcount
+            log(cur, schema, 'admin', f"Cleared channel #{channel} ({count} msgs)", user_id=uid_admin)
+            return resp(200, {'ok':True,'deleted':count})
+        else:
+            return err(400, 'Укажи channel, room_id или msg_id')
+
     # ─── ONLINE ──────────────────────────────────────────────
 
     if action == 'online' and method == 'GET':

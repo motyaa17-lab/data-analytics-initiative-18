@@ -101,5 +101,17 @@ export const api = {
     },
     ban: (token: string, user_id: number, ban: boolean) =>
       req("admin_ban", "POST", token, { user_id, ban }),
+    messages: (token: string, channel?: string, room_id?: number, limit = 50) => {
+      const extra: Record<string, string> = { limit: String(limit) };
+      if (channel) extra.channel = channel;
+      if (room_id) extra.room_id = String(room_id);
+      return req("admin_messages", "GET", token, undefined, extra);
+    },
+    clearChannel: (token: string, channel: string) =>
+      req("admin_clear", "POST", token, { channel }),
+    clearRoom: (token: string, room_id: number) =>
+      req("admin_clear", "POST", token, { room_id }),
+    deleteMsg: (token: string, msg_id: number) =>
+      req("admin_clear", "POST", token, { msg_id }),
   },
 };

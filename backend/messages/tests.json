@@ -16,6 +16,8 @@
     {"name": "Online", "method": "GET", "path": "/?action=online", "expectedStatus": 200},
     {"name": "Profile no username", "method": "GET", "path": "/?action=profile", "expectedStatus": 400},
     {"name": "Edit msg no auth", "method": "POST", "path": "/?action=edit_msg", "body": {"msg_id": 1, "content": "hi"}, "expectedStatus": 401},
-    {"name": "Upload avatar no auth", "method": "POST", "path": "/?action=upload_avatar", "body": {"image": "data:image/png;base64,abc"}, "expectedStatus": 401}
+    {"name": "Upload avatar no auth", "method": "POST", "path": "/?action=upload_avatar", "body": {"image": "data:image/png;base64,abc"}, "expectedStatus": 401},
+    {"name": "Admin messages no auth", "method": "GET", "path": "/?action=admin_messages&channel=general", "expectedStatus": 403},
+    {"name": "Admin clear no auth", "method": "POST", "path": "/?action=admin_clear", "body": {"channel": "general"}, "expectedStatus": 403}
   ]
 }
