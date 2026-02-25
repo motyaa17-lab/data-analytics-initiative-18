@@ -47,7 +47,7 @@ async function apiSendDM(toId: number, content: string, token: string) {
 
 interface Friend { id: number; username: string; favorite_game: string; }
 interface FriendRequest { request_id: number; user_id: number; username: string; favorite_game: string; }
-interface DMessage { id: number; content: string; created_at: string; username: string; }
+interface DMessage { id: number; content: string; created_at: string; username: string; is_removed?: boolean; }
 
 function avatarColor(name: string) {
   const colors = ["#5865f2","#eb459e","#ed4245","#fee75c","#57f287","#1abc9c","#3498db","#e91e63"];
@@ -191,6 +191,18 @@ export default function DirectMessages({ user, token, onClose, seenKey = "frikor
     if (data.message) setMessages(m => [...m, data.message]);
   };
 
+  const handleDeleteDM = async (msgId: number) => {
+    const res = await fetch(`${BASE}?action=delete_dm`, {
+      method: "POST",
+      headers: authHeaders(token),
+      body: JSON.stringify({ msg_id: msgId }),
+    });
+    const data = await res.json();
+    if (data.ok) {
+      setMessages(prev => prev.map(m => m.id === msgId ? { ...m, is_removed: true, content: "" } : m));
+    }
+  };
+
   const handleKey = (e: React.KeyboardEvent) => {
     if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSend(); }
   };
@@ -236,17 +248,34 @@ export default function DirectMessages({ user, token, onClose, seenKey = "frikor
               {messages.map(msg => {
                 const isMe = msg.username === user.username;
                 return (
-                  <div key={msg.id} className={`flex gap-2 ${isMe ? "flex-row-reverse" : ""}`}>
+                  <div key={msg.id} className={`flex gap-2 group ${isMe ? "flex-row-reverse" : ""}`}>
                     <div
                       className="w-7 h-7 rounded-full flex items-center justify-center text-white font-bold text-xs flex-shrink-0 self-end"
                       style={{ background: avatarColor(msg.username) }}
                     >
                       {msg.username[0].toUpperCase()}
                     </div>
-                    <div className={`max-w-[75%] px-3 py-2 rounded-2xl text-sm break-words ${
-                      isMe ? "bg-[#5865f2] text-white rounded-br-sm" : "bg-[#40444b] text-[#dcddde] rounded-bl-sm"
-                    }`}>
-                      {msg.content}
+                    <div className={`relative max-w-[75%] ${isMe ? "items-end" : "items-start"} flex flex-col gap-0.5`}>
+                      {msg.is_removed ? (
+                        <div className="px-3 py-2 rounded-2xl text-sm bg-[#2f3136] text-[#72767d] italic">
+                          сообщение удалено
+                        </div>
+                      ) : (
+                        <div className={`px-3 py-2 rounded-2xl text-sm break-words ${
+                          isMe ? "bg-[#5865f2] text-white rounded-br-sm" : "bg-[#40444b] text-[#dcddde] rounded-bl-sm"
+                        }`}>
+                          {msg.content}
+                        </div>
+                      )}
+                      {isMe && !msg.is_removed && (
+                        <button
+                          onClick={() => handleDeleteDM(msg.id)}
+                          className="opacity-0 group-hover:opacity-100 text-[#72767d] hover:text-[#ed4245] transition-all text-xs self-end"
+                          title="Удалить"
+                        >
+                          <Icon name="Trash2" size={11} />
+                        </button>
+                      )}
                     </div>
                   </div>
                 );

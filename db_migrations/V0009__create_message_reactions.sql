@@ -1,0 +1,1 @@
+CREATE TABLE IF NOT EXISTS t_p75051746_data_analytics_initi.message_reactions (id SERIAL PRIMARY KEY, message_id INTEGER NOT NULL, user_id INTEGER NOT NULL, emoji VARCHAR(16) NOT NULL, created_at TIMESTAMP DEFAULT now(), CONSTRAINT uq_reaction UNIQUE(message_id, user_id, emoji));

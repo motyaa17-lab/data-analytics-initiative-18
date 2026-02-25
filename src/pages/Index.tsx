@@ -7,7 +7,9 @@ import RegisterModal from "@/components/RegisterModal";
 import LoginModal from "@/components/LoginModal";
 import AdminPanel from "@/components/AdminPanel";
 import DirectMessages from "@/components/DirectMessages";
+import SettingsModal from "@/components/SettingsModal";
 import { useAuth } from "@/hooks/useAuth";
+import { User } from "@/hooks/useAuth";
 import Icon from "@/components/ui/icon";
 
 const BASE = "https://functions.poehali.dev/b1a16ec3-c9d7-4e46-bb90-e30137e5c534";
@@ -36,6 +38,7 @@ const Index = () => {
   const [showLoginModal, setShowLoginModal] = useState(false);
   const [showAdmin, setShowAdmin] = useState(false);
   const [showDM, setShowDM] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
   const [activeChannel, setActiveChannel] = useState("general");
   const [activeRoomId, setActiveRoomId] = useState<number | undefined>();
@@ -107,6 +110,14 @@ const Index = () => {
       )}
       {showAdmin && token && <AdminPanel token={token} onClose={() => setShowAdmin(false)} />}
       {showDM && user && token && <DirectMessages user={user} token={token} onClose={handleCloseDM} seenKey={SEEN_KEY} />}
+      {showSettings && user && token && (
+        <SettingsModal
+          user={user}
+          token={token}
+          onClose={() => setShowSettings(false)}
+          onUpdate={(upd: Partial<User>) => login(token, { ...user, ...upd })}
+        />
+      )}
 
       <Navbar onRegisterClick={() => setShowRegModal(true)} onLoginClick={() => setShowLoginModal(true)} user={user} />
 
@@ -145,6 +156,7 @@ const Index = () => {
             onLogout={logout}
             onAdminClick={() => setShowAdmin(true)}
             onDMClick={handleOpenDM}
+            onSettingsClick={() => setShowSettings(true)}
           />
           <ChatArea
             onSidebarOpen={() => setMobileSidebarOpen(true)}

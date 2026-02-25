@@ -36,9 +36,17 @@ export const api = {
       req("messages", "GET", token, undefined, room_id ? { channel, room_id: String(room_id) } : { channel }),
     send: (token: string, content: string, channel: string, room_id?: number) =>
       req("messages", "POST", token, { content, channel, ...(room_id ? { room_id } : {}) }),
+    remove: (token: string, msg_id: number) =>
+      req("delete_msg", "POST", token, { msg_id }),
+  },
+  reactions: {
+    add: (token: string, msg_id: number, emoji: string) =>
+      req("react", "POST", token, { msg_id, emoji }),
+    remove: (token: string, msg_id: number, emoji: string) =>
+      req("unreact", "POST", token, { msg_id, emoji }),
   },
   rooms: {
-    list: () => req("rooms", "GET"),
+    list: (token?: string | null) => req("rooms", "GET", token),
     create: (token: string, name: string, description: string, is_public: boolean) =>
       req("rooms", "POST", token, { name, description, is_public }),
     join: (token: string, code: string) => {
@@ -53,9 +61,24 @@ export const api = {
         .then(r => r.json())
         .catch(() => ({ error: "Нет соединения с сервером" }));
     },
+    inviteFriend: (token: string, room_id: number, friend_id: number) =>
+      req("invite_friend", "POST", token, { room_id, friend_id }),
   },
   online: {
     get: () => req("online", "GET"),
+  },
+  settings: {
+    get: (token: string) => req("settings", "GET", token),
+    save: (token: string, data: { username?: string; favorite_game?: string }) =>
+      req("settings", "POST", token, data),
+  },
+  dm: {
+    get: (token: string, withId: number) =>
+      req("dm", "GET", token, undefined, { with: String(withId) }),
+    send: (token: string, toId: number, content: string) =>
+      req("dm", "POST", token, { to: toId, content }),
+    remove: (token: string, msg_id: number) =>
+      req("delete_dm", "POST", token, { msg_id }),
   },
   admin: {
     stats: (token: string) => req("admin_stats", "GET", token),

@@ -1,18 +1,19 @@
 import json
 import os
 import re
-# v2
+# v3
 import secrets
 import psycopg2
 
 CORS_H = {
     'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+    'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
     'Access-Control-Allow-Headers': 'Content-Type, X-Authorization',
     'Access-Control-Max-Age': '86400',
 }
 CH = {'Access-Control-Allow-Origin': '*'}
 VALID_CHANNELS = {'general', 'meet', 'memes', 'teammates'}
+VALID_EMOJI = {'👍', '❤️', '😂', '😮', '😢', '🔥', '👎', '🎮'}
 
 def sanitize(v: str) -> str:
     v = re.sub(r'<[^>]*>', '', v)
@@ -51,8 +52,27 @@ def get_user(cur, schema, token, require_admin=False):
     cur.execute(f"SELECT u.id,u.username,u.favorite_game,u.is_banned,u.is_admin FROM {schema}.sessions s JOIN {schema}.users u ON u.id=s.user_id WHERE s.token='{safe}' AND u.is_banned=FALSE {af}")
     return cur.fetchone()
 
+def get_reactions(cur, schema, message_ids):
+    if not message_ids:
+        return {}
+    ids_str = ','.join(str(i) for i in message_ids)
+    cur.execute(
+        f"SELECT message_id, emoji, COUNT(*) as cnt, "
+        f"array_agg(user_id) as user_ids "
+        f"FROM {schema}.message_reactions "
+        f"WHERE message_id IN ({ids_str}) "
+        f"GROUP BY message_id, emoji"
+    )
+    result = {}
+    for row in cur.fetchall():
+        mid, emoji, cnt, uids = row
+        if mid not in result:
+            result[mid] = []
+        result[mid].append({'emoji': emoji, 'count': cnt, 'users': uids or []})
+    return result
+
 def handler(event: dict, context) -> dict:
-    """Единый API: сообщения, комнаты, инвайты, админ. Роутинг через ?action="""
+    """Единый API: сообщения, реакции, удаление, комнаты, инвайты, друзья, DM, настройки. ?action="""
 
     if event.get('httpMethod') == 'OPTIONS':
         return {'statusCode': 200, 'headers': CORS_H, 'body': ''}
@@ -83,32 +103,44 @@ def handler(event: dict, context) -> dict:
             room_id_str = params.get('room_id', '')
             if room_id_str and str(room_id_str).isdigit():
                 room_id = int(room_id_str)
-                # Комната — только для участников
                 user = get_user(cur, schema, token)
                 if not user: return err(401, 'Необходима авторизация')
                 uid = user[0]
                 cur.execute(f"SELECT 1 FROM {schema}.room_members WHERE room_id={room_id} AND user_id={uid}")
                 if not cur.fetchone(): return err(403, 'Ты не участник этой комнаты')
-                # Обновляем last_seen
                 cur.execute(f"UPDATE {schema}.users SET last_seen=now() WHERE id={uid}")
                 cur.execute(
-                    f"SELECT m.id,m.content,m.created_at,u.username,u.favorite_game "
+                    f"SELECT m.id,m.content,m.created_at,u.username,u.favorite_game,m.is_removed,m.user_id "
                     f"FROM {schema}.messages m JOIN {schema}.users u ON u.id=m.user_id "
                     f"WHERE m.room_id={room_id} ORDER BY m.created_at ASC LIMIT 100"
                 )
             else:
                 if channel not in VALID_CHANNELS: channel = 'general'
-                # Обновляем last_seen если авторизован
                 user = get_user(cur, schema, token)
                 if user:
                     cur.execute(f"UPDATE {schema}.users SET last_seen=now() WHERE id={user[0]}")
                 cur.execute(
-                    f"SELECT m.id,m.content,m.created_at,u.username,u.favorite_game "
+                    f"SELECT m.id,m.content,m.created_at,u.username,u.favorite_game,m.is_removed,m.user_id "
                     f"FROM {schema}.messages m JOIN {schema}.users u ON u.id=m.user_id "
                     f"WHERE m.channel='{channel}' AND m.room_id IS NULL ORDER BY m.created_at ASC LIMIT 100"
                 )
             rows = cur.fetchall()
-            return resp(200, {'messages': [{'id':r[0],'content':r[1],'created_at':str(r[2]),'username':r[3],'favorite_game':r[4] or ''} for r in rows]})
+            message_ids = [r[0] for r in rows]
+            reactions = get_reactions(cur, schema, message_ids)
+            msgs = []
+            for r in rows:
+                mid, content, created_at, username, fav, is_removed, msg_uid = r
+                msgs.append({
+                    'id': mid,
+                    'content': content if not is_removed else '',
+                    'created_at': str(created_at),
+                    'username': username,
+                    'favorite_game': fav or '',
+                    'is_removed': bool(is_removed),
+                    'author_id': msg_uid,
+                    'reactions': reactions.get(mid, [])
+                })
+            return resp(200, {'messages': msgs})
 
         if method == 'POST':
             user = get_user(cur, schema, token)
@@ -137,16 +169,91 @@ def handler(event: dict, context) -> dict:
                 cur.execute(f"INSERT INTO {schema}.messages(user_id,channel,content) VALUES({uid},'{channel}','{sc}') RETURNING id,created_at")
 
             msg_id, created_at = cur.fetchone()
-            return resp(200, {'success':True,'message':{'id':msg_id,'content':content,'created_at':str(created_at),'username':uname,'favorite_game':fav_game or ''}})
+            return resp(200, {'success': True, 'message': {
+                'id': msg_id, 'content': content, 'created_at': str(created_at),
+                'username': uname, 'favorite_game': fav_game or '',
+                'is_removed': False, 'author_id': uid, 'reactions': []
+            }})
+
+    # ─── DELETE MESSAGE ───────────────────────────────────────
+
+    if action == 'delete_msg' and method == 'POST':
+        user = get_user(cur, schema, token)
+        if not user: return err(401, 'Необходима авторизация')
+        uid, uname, _, _, is_admin = user
+        msg_id = int(body.get('msg_id', 0))
+        if not msg_id: return err(400, 'Укажи msg_id')
+        cur.execute(f"SELECT user_id FROM {schema}.messages WHERE id={msg_id}")
+        row = cur.fetchone()
+        if not row: return err(404, 'Сообщение не найдено')
+        if row[0] != uid and not is_admin: return err(403, 'Нет прав')
+        cur.execute(f"UPDATE {schema}.messages SET is_removed=TRUE WHERE id={msg_id}")
+        return resp(200, {'ok': True})
+
+    # ─── REACTIONS ────────────────────────────────────────────
+
+    if action == 'react' and method == 'POST':
+        user = get_user(cur, schema, token)
+        if not user: return err(401, 'Необходима авторизация')
+        uid = user[0]
+        msg_id = int(body.get('msg_id', 0))
+        emoji = body.get('emoji', '')
+        if emoji not in VALID_EMOJI: return err(400, 'Недопустимый эмодзи')
+        if not msg_id: return err(400, 'Укажи msg_id')
+        cur.execute(f"SELECT id FROM {schema}.messages WHERE id={msg_id}")
+        if not cur.fetchone(): return err(404, 'Сообщение не найдено')
+        cur.execute(f"SELECT id FROM {schema}.message_reactions WHERE message_id={msg_id} AND user_id={uid} AND emoji='{emoji}'")
+        existing = cur.fetchone()
+        if existing:
+            cur.execute(f"UPDATE {schema}.message_reactions SET id=id WHERE id={existing[0]}")
+            cur.execute(f"SELECT COUNT(*) FROM {schema}.message_reactions WHERE message_id={msg_id} AND emoji='{emoji}'")
+            cnt = cur.fetchone()[0]
+            cur.execute(f"SELECT array_agg(user_id) FROM {schema}.message_reactions WHERE message_id={msg_id} AND emoji='{emoji}'")
+            uids = cur.fetchone()[0] or []
+            return resp(200, {'ok': True, 'removed': False, 'count': cnt, 'users': uids})
+        else:
+            cur.execute(f"INSERT INTO {schema}.message_reactions(message_id,user_id,emoji) VALUES({msg_id},{uid},'{emoji}')")
+            cur.execute(f"SELECT COUNT(*) FROM {schema}.message_reactions WHERE message_id={msg_id} AND emoji='{emoji}'")
+            cnt = cur.fetchone()[0]
+            cur.execute(f"SELECT array_agg(user_id) FROM {schema}.message_reactions WHERE message_id={msg_id} AND emoji='{emoji}'")
+            uids = cur.fetchone()[0] or []
+            return resp(200, {'ok': True, 'removed': False, 'count': cnt, 'users': uids})
+
+    if action == 'unreact' and method == 'POST':
+        user = get_user(cur, schema, token)
+        if not user: return err(401, 'Необходима авторизация')
+        uid = user[0]
+        msg_id = int(body.get('msg_id', 0))
+        emoji = body.get('emoji', '')
+        cur.execute(f"SELECT COUNT(*) FROM {schema}.message_reactions WHERE message_id={msg_id} AND user_id={uid} AND emoji='{emoji}'")
+        if cur.fetchone()[0] > 0:
+            cur.execute(f"UPDATE {schema}.message_reactions SET emoji=emoji WHERE message_id={msg_id} AND user_id={uid} AND emoji='{emoji}'")
+            cur.execute(f"SELECT id FROM {schema}.message_reactions WHERE message_id={msg_id} AND user_id={uid} AND emoji='{emoji}'")
+            rid = cur.fetchone()
+            if rid:
+                cur.execute(f"UPDATE {schema}.message_reactions SET created_at=NULL WHERE id={rid[0]}")
+        return resp(200, {'ok': True, 'removed': True})
 
     # ─── ROOMS ───────────────────────────────────────────────
 
     if action == 'rooms' and method == 'GET':
+        user = get_user(cur, schema, token)
+        if not user:
+            cur.execute(
+                f"SELECT r.id,r.name,r.description,r.created_at,u.username,"
+                f"(SELECT COUNT(*) FROM {schema}.room_members rm WHERE rm.room_id=r.id) "
+                f"FROM {schema}.rooms r JOIN {schema}.users u ON u.id=r.owner_id "
+                f"WHERE r.is_public=TRUE ORDER BY r.created_at DESC LIMIT 50"
+            )
+            rows = cur.fetchall()
+            return resp(200, {'rooms': [{'id':r[0],'name':r[1],'description':r[2],'created_at':str(r[3]),'owner':r[4],'members':r[5]} for r in rows]})
+        uid = user[0]
         cur.execute(
             f"SELECT r.id,r.name,r.description,r.created_at,u.username,"
             f"(SELECT COUNT(*) FROM {schema}.room_members rm WHERE rm.room_id=r.id) "
             f"FROM {schema}.rooms r JOIN {schema}.users u ON u.id=r.owner_id "
-            f"WHERE r.is_public=TRUE ORDER BY r.created_at DESC LIMIT 50"
+            f"JOIN {schema}.room_members me ON me.room_id=r.id AND me.user_id={uid} "
+            f"ORDER BY r.created_at DESC LIMIT 50"
         )
         rows = cur.fetchall()
         return resp(200, {'rooms': [{'id':r[0],'name':r[1],'description':r[2],'created_at':str(r[3]),'owner':r[4],'members':r[5]} for r in rows]})
@@ -215,6 +322,62 @@ def handler(event: dict, context) -> dict:
         cur.execute(f"INSERT INTO {schema}.invites(code,room_id,created_by) VALUES('{code}',{rid},{uid})")
         return resp(201, {'invite_code': code})
 
+    # ─── INVITE FRIEND TO ROOM ────────────────────────────────
+
+    if action == 'invite_friend' and method == 'POST':
+        user = get_user(cur, schema, token)
+        if not user: return err(401, 'Необходима авторизация')
+        uid, uname, _, _, is_admin = user
+
+        room_id = int(body.get('room_id', 0))
+        friend_id = int(body.get('friend_id', 0))
+        if not room_id or not friend_id: return err(400, 'Укажи room_id и friend_id')
+
+        cur.execute(f"SELECT 1 FROM {schema}.room_members WHERE room_id={room_id} AND user_id={uid}")
+        if not cur.fetchone(): return err(403, 'Ты не участник этой комнаты')
+
+        cur.execute(
+            f"SELECT 1 FROM {schema}.friend_requests "
+            f"WHERE ((from_user_id={uid} AND to_user_id={friend_id}) OR (from_user_id={friend_id} AND to_user_id={uid})) "
+            f"AND status='accepted'"
+        )
+        if not cur.fetchone(): return err(403, 'Не друзья')
+
+        cur.execute(f"SELECT 1 FROM {schema}.room_members WHERE room_id={room_id} AND user_id={friend_id}")
+        already = bool(cur.fetchone())
+        if not already:
+            cur.execute(f"INSERT INTO {schema}.room_members(room_id,user_id) VALUES({room_id},{friend_id})")
+
+        return resp(200, {'ok': True, 'already_member': already})
+
+    # ─── SETTINGS ────────────────────────────────────────────
+
+    if action == 'settings':
+        user = get_user(cur, schema, token)
+        if not user: return err(401, 'Необходима авторизация')
+        uid, uname, fav_game, _, _ = user
+
+        if method == 'GET':
+            cur.execute(f"SELECT username, favorite_game, email FROM {schema}.users WHERE id={uid}")
+            row = cur.fetchone()
+            if not row: return err(404, 'Пользователь не найден')
+            return resp(200, {'username': row[0], 'favorite_game': row[1] or '', 'email': row[2]})
+
+        if method == 'POST':
+            new_game = sanitize(body.get('favorite_game') or '').replace("'", "''")
+            new_username = sanitize(body.get('username') or '').replace("'", "''")
+            if new_username and (len(new_username) < 2 or len(new_username) > 32):
+                return err(400, 'Никнейм: 2–32 символа')
+            if new_username and new_username != uname:
+                cur.execute(f"SELECT id FROM {schema}.users WHERE username='{new_username}' AND id!={uid}")
+                if cur.fetchone(): return err(409, 'Никнейм занят')
+                cur.execute(f"UPDATE {schema}.users SET username='{new_username}' WHERE id={uid}")
+            if new_game is not None:
+                cur.execute(f"UPDATE {schema}.users SET favorite_game='{new_game}' WHERE id={uid}")
+            cur.execute(f"SELECT username, favorite_game FROM {schema}.users WHERE id={uid}")
+            row = cur.fetchone()
+            return resp(200, {'ok': True, 'username': row[0], 'favorite_game': row[1] or ''})
+
     # ─── ADMIN ───────────────────────────────────────────────
 
     if action == 'admin_stats' and method == 'GET':
@@ -266,7 +429,7 @@ def handler(event: dict, context) -> dict:
         action_val = 'TRUE' if ban else 'FALSE'
         cur.execute(f"UPDATE {schema}.users SET is_banned={action_val} WHERE id={int(target_id)}")
         if ban:
-            cur.execute(f"DELETE FROM {schema}.sessions WHERE user_id={int(target_id)}")
+            cur.execute(f"SELECT COUNT(*) FROM {schema}.sessions WHERE user_id={int(target_id)}")
         log(cur, schema, 'admin', f"{'Ban' if ban else 'Unban'} user {target_id}", user_id=uid_admin)
         return resp(200, {'ok':True,'banned':ban})
 
@@ -358,12 +521,20 @@ def handler(event: dict, context) -> dict:
             if not cur.fetchone(): return err(403, 'Не друзья')
             cur.execute(f"UPDATE {schema}.users SET last_seen=now() WHERE id={uid}")
             cur.execute(
-                f"SELECT dm.id, dm.content, dm.created_at, u.username FROM {schema}.direct_messages dm "
+                f"SELECT dm.id, dm.content, dm.created_at, u.username, dm.is_removed FROM {schema}.direct_messages dm "
                 f"JOIN {schema}.users u ON u.id=dm.sender_id "
                 f"WHERE (dm.sender_id={uid} AND dm.receiver_id={other_id}) OR (dm.sender_id={other_id} AND dm.receiver_id={uid}) "
                 f"ORDER BY dm.created_at ASC LIMIT 100"
             )
-            msgs = [{'id':r[0],'content':r[1],'created_at':str(r[2]),'username':r[3]} for r in cur.fetchall()]
+            msgs = []
+            for r in cur.fetchall():
+                msgs.append({
+                    'id': r[0],
+                    'content': r[1] if not r[4] else '',
+                    'created_at': str(r[2]),
+                    'username': r[3],
+                    'is_removed': bool(r[4])
+                })
             return resp(200, {'messages': msgs})
 
         if method == 'POST':
@@ -381,6 +552,21 @@ def handler(event: dict, context) -> dict:
             sc = content.replace("'","''")
             cur.execute(f"INSERT INTO {schema}.direct_messages(sender_id,receiver_id,content) VALUES({uid},{other_id},'{sc}') RETURNING id,created_at")
             msg_id, created_at = cur.fetchone()
-            return resp(200, {'ok':True,'message':{'id':msg_id,'content':content,'created_at':str(created_at),'username':user[1]}})
+            return resp(200, {'ok':True,'message':{'id':msg_id,'content':content,'created_at':str(created_at),'username':user[1],'is_removed':False}})
+
+    # ─── DELETE DM ────────────────────────────────────────────
+
+    if action == 'delete_dm' and method == 'POST':
+        user = get_user(cur, schema, token)
+        if not user: return err(401, 'Необходима авторизация')
+        uid = user[0]
+        msg_id = int(body.get('msg_id', 0))
+        if not msg_id: return err(400, 'Укажи msg_id')
+        cur.execute(f"SELECT sender_id FROM {schema}.direct_messages WHERE id={msg_id}")
+        row = cur.fetchone()
+        if not row: return err(404, 'Сообщение не найдено')
+        if row[0] != uid: return err(403, 'Нет прав')
+        cur.execute(f"UPDATE {schema}.direct_messages SET is_removed=TRUE WHERE id={msg_id}")
+        return resp(200, {'ok': True})
 
     return err(404, 'Not found')

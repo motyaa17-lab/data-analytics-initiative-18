@@ -5,12 +5,21 @@ import Icon from "@/components/ui/icon";
 import { User } from "@/hooks/useAuth";
 import { api } from "@/lib/api";
 
+interface Reaction {
+  emoji: string;
+  count: number;
+  users: number[];
+}
+
 interface Message {
   id: number;
   content: string;
   created_at: string;
   username: string;
   favorite_game: string;
+  is_removed?: boolean;
+  author_id?: number;
+  reactions?: Reaction[];
 }
 
 interface OnlineUser {
@@ -35,6 +44,8 @@ const CHANNEL_LABELS: Record<string, string> = {
   teammates: "поиск-тиммейтов",
 };
 
+const EMOJI_LIST = ["👍", "❤️", "😂", "😮", "😢", "🔥", "👎", "🎮"];
+
 function getAvatarColor(username: string) {
   const colors = [
     "from-purple-500 to-pink-500",
@@ -57,12 +68,6 @@ function formatTime(iso: string) {
   });
 }
 
-function requestNotificationPermission() {
-  if ("Notification" in window && Notification.permission === "default") {
-    Notification.requestPermission();
-  }
-}
-
 function sendNotification(username: string, content: string) {
   if ("Notification" in window && Notification.permission === "granted" && document.hidden) {
     new Notification(`${username} в Frikords`, {
@@ -83,6 +88,8 @@ const ChatArea = ({ onSidebarOpen, onRegisterClick, user, token, channel, roomId
     "Notification" in window && Notification.permission === "granted"
   );
   const [newMsgCount, setNewMsgCount] = useState(0);
+  const [hoveredMsg, setHoveredMsg] = useState<number | null>(null);
+  const [emojiPickerFor, setEmojiPickerFor] = useState<number | null>(null);
   const lastMsgIdRef = useRef<number | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
@@ -104,7 +111,6 @@ const ChatArea = ({ onSidebarOpen, onRegisterClick, user, token, channel, roomId
       const msgs = data.messages as Message[];
       setMessages(prev => {
         if (prev.length > 0 && msgs.length > prev.length) {
-          const added = msgs.length - prev.length;
           const newOnes = msgs.slice(prev.length);
           const fromOthers = newOnes.filter(m => m.username !== user?.username).length;
           if (fromOthers > 0 && !isAtBottom()) {
@@ -135,16 +141,13 @@ const ChatArea = ({ onSidebarOpen, onRegisterClick, user, token, channel, roomId
 
   useEffect(() => {
     setMessages([]);
+    setNewMsgCount(0);
     lastMsgIdRef.current = null;
     fetchMessages();
     fetchOnline();
     const interval = setInterval(() => { fetchMessages(); fetchOnline(); }, 5000);
     return () => clearInterval(interval);
   }, [channel, roomId]);
-
-  useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages]);
 
   const sendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -158,6 +161,50 @@ const ChatArea = ({ onSidebarOpen, onRegisterClick, user, token, channel, roomId
       const msg = data.message as Message;
       setMessages(prev => [...prev, msg]);
       lastMsgIdRef.current = msg.id;
+      setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: "smooth" }), 50);
+    }
+  };
+
+  const handleDelete = async (msgId: number) => {
+    if (!token) return;
+    const res = await api.messages.remove(token, msgId);
+    if (res.ok) {
+      setMessages(prev => prev.map(m => m.id === msgId ? { ...m, is_removed: true, content: "" } : m));
+    }
+  };
+
+  const handleReact = async (msgId: number, emoji: string) => {
+    if (!token || !user) return;
+    setEmojiPickerFor(null);
+    const msg = messages.find(m => m.id === msgId);
+    const existing = msg?.reactions?.find(r => r.emoji === emoji);
+    const alreadyReacted = existing?.users.includes((user as unknown as { id: number }).id);
+
+    if (alreadyReacted) {
+      await api.reactions.remove(token, msgId, emoji);
+      setMessages(prev => prev.map(m => {
+        if (m.id !== msgId) return m;
+        const newReactions = (m.reactions || []).map(r => {
+          if (r.emoji !== emoji) return r;
+          const newUsers = r.users.filter(uid => uid !== (user as unknown as { id: number }).id);
+          return { ...r, count: newUsers.length, users: newUsers };
+        }).filter(r => r.count > 0);
+        return { ...m, reactions: newReactions };
+      }));
+    } else {
+      await api.reactions.add(token, msgId, emoji);
+      setMessages(prev => prev.map(m => {
+        if (m.id !== msgId) return m;
+        const reactions = [...(m.reactions || [])];
+        const idx = reactions.findIndex(r => r.emoji === emoji);
+        const uid = (user as unknown as { id: number }).id;
+        if (idx >= 0) {
+          reactions[idx] = { ...reactions[idx], count: reactions[idx].count + 1, users: [...reactions[idx].users, uid] };
+        } else {
+          reactions.push({ emoji, count: 1, users: [uid] });
+        }
+        return { ...m, reactions };
+      }));
     }
   };
 
@@ -169,8 +216,7 @@ const ChatArea = ({ onSidebarOpen, onRegisterClick, user, token, channel, roomId
   const label = roomId ? (roomName || "комната") : (CHANNEL_LABELS[channel] || channel);
 
   return (
-    <div className="flex-1 flex min-h-0 overflow-hidden">
-      {/* Chat column */}
+    <div className="flex-1 flex min-h-0 overflow-hidden" onClick={() => setEmojiPickerFor(null)}>
       <div className="flex-1 flex flex-col min-h-0 min-w-0">
         {/* Header */}
         <div className="h-12 bg-[#36393f] border-b border-[#202225] flex items-center px-4 gap-2 flex-shrink-0">
@@ -187,28 +233,16 @@ const ChatArea = ({ onSidebarOpen, onRegisterClick, user, token, channel, roomId
               </div>
             )}
             {"Notification" in window && !notifEnabled && (
-              <button
-                onClick={handleEnableNotif}
-                title="Включить уведомления"
-                className="text-[#b9bbbe] hover:text-[#faa81a] transition-colors"
-              >
+              <button onClick={handleEnableNotif} title="Включить уведомления" className="text-[#b9bbbe] hover:text-[#faa81a] transition-colors">
                 <Icon name="BellOff" size={16} />
               </button>
             )}
             {"Notification" in window && notifEnabled && (
-              <button
-                onClick={() => { setNotifEnabled(false); }}
-                title="Уведомления включены"
-                className="text-[#3ba55c] hover:text-[#b9bbbe] transition-colors"
-              >
+              <button onClick={() => setNotifEnabled(false)} title="Уведомления включены" className="text-[#3ba55c] hover:text-[#b9bbbe] transition-colors">
                 <Icon name="Bell" size={16} />
               </button>
             )}
-            <button
-              onClick={() => setShowUsers(v => !v)}
-              title="Пользователи онлайн"
-              className={`transition-colors ${showUsers ? "text-white" : "text-[#b9bbbe] hover:text-white"}`}
-            >
+            <button onClick={() => setShowUsers(v => !v)} title="Пользователи онлайн" className={`transition-colors ${showUsers ? "text-white" : "text-[#b9bbbe] hover:text-white"}`}>
               <Icon name="Users" size={16} />
             </button>
           </div>
@@ -216,27 +250,105 @@ const ChatArea = ({ onSidebarOpen, onRegisterClick, user, token, channel, roomId
 
         {/* Messages */}
         <div className="relative flex-1 min-h-0">
-          <div ref={scrollContainerRef} className="h-full overflow-y-auto p-3 space-y-3">
+          <div ref={scrollContainerRef} className="h-full overflow-y-auto p-3 space-y-1">
             {messages.length === 0 && (
               <div className="text-center text-[#72767d] text-sm py-12">
                 Сообщений пока нет. Будь первым!
               </div>
             )}
-            {messages.map((msg) => (
-              <div key={msg.id} className="flex gap-3 hover:bg-[#32353b] rounded px-2 py-1 -mx-2">
-                <div className={`w-9 h-9 bg-gradient-to-r ${getAvatarColor(msg.username)} rounded-full flex items-center justify-center flex-shrink-0 mt-0.5`}>
-                  <span className="text-white text-sm font-semibold">{msg.username[0].toUpperCase()}</span>
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-baseline gap-2 mb-0.5">
-                    <span className="text-white font-medium text-sm">{msg.username}</span>
-                    {msg.favorite_game && <span className="text-[#5865f2] text-xs">🎮 {msg.favorite_game}</span>}
-                    <span className="text-[#72767d] text-xs">{formatTime(msg.created_at)}</span>
+            {messages.map((msg) => {
+              const isOwn = user && msg.author_id === (user as unknown as { id: number }).id;
+              const isHovered = hoveredMsg === msg.id;
+              return (
+                <div
+                  key={msg.id}
+                  className="relative flex gap-3 hover:bg-[#32353b] rounded px-2 py-1 -mx-2 group"
+                  onMouseEnter={() => setHoveredMsg(msg.id)}
+                  onMouseLeave={() => { setHoveredMsg(null); }}
+                >
+                  <div className={`w-9 h-9 bg-gradient-to-r ${getAvatarColor(msg.username)} rounded-full flex items-center justify-center flex-shrink-0 mt-0.5`}>
+                    <span className="text-white text-sm font-semibold">{msg.username[0].toUpperCase()}</span>
                   </div>
-                  <p className="text-[#dcddde] text-sm break-words">{msg.content}</p>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-baseline gap-2 mb-0.5">
+                      <span className="text-white font-medium text-sm">{msg.username}</span>
+                      {msg.favorite_game && !msg.is_removed && <span className="text-[#5865f2] text-xs">🎮 {msg.favorite_game}</span>}
+                      <span className="text-[#72767d] text-xs">{formatTime(msg.created_at)}</span>
+                    </div>
+                    {msg.is_removed ? (
+                      <p className="text-[#72767d] text-sm italic">сообщение удалено</p>
+                    ) : (
+                      <p className="text-[#dcddde] text-sm break-words">{msg.content}</p>
+                    )}
+                    {/* Reactions row */}
+                    {!msg.is_removed && (msg.reactions || []).length > 0 && (
+                      <div className="flex flex-wrap gap-1 mt-1">
+                        {(msg.reactions || []).map(r => {
+                          const iMine = user && r.users.includes((user as unknown as { id: number }).id);
+                          return (
+                            <button
+                              key={r.emoji}
+                              onClick={e => { e.stopPropagation(); handleReact(msg.id, r.emoji); }}
+                              className={`flex items-center gap-0.5 text-xs px-1.5 py-0.5 rounded-full border transition-colors ${
+                                iMine
+                                  ? "bg-[#5865f2]/20 border-[#5865f2]/60 text-white"
+                                  : "bg-[#2f3136] border-[#40444b] text-[#dcddde] hover:border-[#5865f2]/50"
+                              }`}
+                            >
+                              <span>{r.emoji}</span>
+                              <span className="text-[10px] font-medium">{r.count}</span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Action buttons on hover */}
+                  {!msg.is_removed && user && isHovered && (
+                    <div
+                      className="absolute right-2 top-0 -translate-y-1/2 flex items-center gap-1 bg-[#2f3136] border border-[#202225] rounded-lg shadow-lg px-1 py-0.5 z-10"
+                      onClick={e => e.stopPropagation()}
+                    >
+                      <button
+                        onClick={() => setEmojiPickerFor(v => v === msg.id ? null : msg.id)}
+                        className="text-[#b9bbbe] hover:text-white transition-colors p-1 rounded hover:bg-[#40444b]"
+                        title="Реакция"
+                      >
+                        <Icon name="Smile" size={14} />
+                      </button>
+                      {isOwn && (
+                        <button
+                          onClick={() => handleDelete(msg.id)}
+                          className="text-[#b9bbbe] hover:text-[#ed4245] transition-colors p-1 rounded hover:bg-[#40444b]"
+                          title="Удалить"
+                        >
+                          <Icon name="Trash2" size={14} />
+                        </button>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Emoji picker */}
+                  {emojiPickerFor === msg.id && (
+                    <div
+                      className="absolute right-2 top-7 bg-[#2f3136] border border-[#202225] rounded-lg shadow-xl p-2 z-20 flex gap-1"
+                      onClick={e => e.stopPropagation()}
+                    >
+                      {EMOJI_LIST.map(emoji => (
+                        <button
+                          key={emoji}
+                          onClick={() => handleReact(msg.id, emoji)}
+                          className="text-xl hover:scale-125 transition-transform p-0.5 rounded hover:bg-[#40444b]"
+                        >
+                          {emoji}
+                        </button>
+                      ))}
+                    </div>
+                  )}
                 </div>
-              </div>
-            ))}
+              );
+            })}
             <div ref={bottomRef} />
           </div>
           {newMsgCount > 0 && (

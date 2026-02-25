@@ -3,14 +3,16 @@
     {"name": "OPTIONS", "method": "OPTIONS", "path": "/", "expectedStatus": 200},
     {"name": "Get messages", "method": "GET", "path": "/?action=messages", "expectedStatus": 200},
     {"name": "Send no auth", "method": "POST", "path": "/?action=messages", "body": {"content": "Hi"}, "expectedStatus": 401},
-    {"name": "Get rooms", "method": "GET", "path": "/?action=rooms", "expectedStatus": 200},
+    {"name": "Get rooms no auth", "method": "GET", "path": "/?action=rooms", "expectedStatus": 200},
     {"name": "Create room no auth", "method": "POST", "path": "/?action=rooms", "body": {"name": "test"}, "expectedStatus": 401},
-    {"name": "Join no auth no code", "method": "POST", "path": "/?action=join", "expectedStatus": 401},
-    {"name": "Invite no auth", "method": "POST", "path": "/?action=invite", "expectedStatus": 401},
-    {"name": "Create invite no auth", "method": "POST", "path": "/?action=invite&room_id=1", "expectedStatus": 401},
+    {"name": "Join no auth", "method": "POST", "path": "/?action=join", "expectedStatus": 401},
+    {"name": "Invite no auth", "method": "POST", "path": "/?action=invite&room_id=1", "expectedStatus": 401},
     {"name": "Friends list no auth", "method": "GET", "path": "/?action=friends&sub=list", "expectedStatus": 401},
     {"name": "Friends requests no auth", "method": "GET", "path": "/?action=friends&sub=requests", "expectedStatus": 401},
     {"name": "DM get no auth", "method": "GET", "path": "/?action=dm&with=1", "expectedStatus": 401},
-    {"name": "DM send no auth", "method": "POST", "path": "/?action=dm", "body": {"to": 1, "content": "hi"}, "expectedStatus": 401}
+    {"name": "DM send no auth", "method": "POST", "path": "/?action=dm", "body": {"to": 1, "content": "hi"}, "expectedStatus": 401},
+    {"name": "Delete msg no auth", "method": "POST", "path": "/?action=delete_msg", "body": {"msg_id": 1}, "expectedStatus": 401},
+    {"name": "Settings no auth", "method": "GET", "path": "/?action=settings", "expectedStatus": 401},
+    {"name": "Online", "method": "GET", "path": "/?action=online", "expectedStatus": 200}
   ]
 }

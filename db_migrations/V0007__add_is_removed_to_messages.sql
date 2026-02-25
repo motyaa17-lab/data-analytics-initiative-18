@@ -1,0 +1,1 @@
+ALTER TABLE t_p75051746_data_analytics_initi.messages ADD COLUMN IF NOT EXISTS is_removed BOOLEAN NOT NULL DEFAULT FALSE;
