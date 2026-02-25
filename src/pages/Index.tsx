@@ -44,7 +44,7 @@ const Index = () => {
       <Navbar onRegisterClick={() => setShowRegModal(true)} onLoginClick={() => setShowLoginModal(true)} user={user} />
 
       <div className="flex flex-1 min-h-0">
-        <div className="hidden lg:flex w-[72px] bg-[#202225] flex-col items-center py-3 gap-2 flex-shrink-0">
+        <div className="flex w-[72px] bg-[#202225] flex-col items-center py-3 gap-2 flex-shrink-0">
           <div className="w-12 h-12 bg-[#5865f2] rounded-2xl flex items-center justify-center">
             <Gamepad2 className="w-6 h-6 text-white" />
           </div>
