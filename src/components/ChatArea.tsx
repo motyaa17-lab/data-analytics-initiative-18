@@ -160,6 +160,29 @@ const ChatArea = ({ onSidebarOpen, onRegisterClick, user, token, channel, roomId
     setImageUrl(null);
   };
 
+  const handleVoiceSend = async (blob: Blob, ext: string) => {
+    if (!token) return;
+    setSending(true);
+    try {
+      const arrayBuf = await blob.arrayBuffer();
+      const bytes = new Uint8Array(arrayBuf);
+      let binary = "";
+      bytes.forEach(b => binary += String.fromCharCode(b));
+      const b64 = btoa(binary);
+      const upRes = await api.messages.uploadVoice(token, b64, ext);
+      if (!upRes.url) return;
+      const data = await api.messages.sendWithVoice(token, channel, upRes.url as string, roomId);
+      if (data.success && data.message) {
+        const msg = data.message as Message;
+        setMessages(prev => [...prev, msg]);
+        lastMsgIdRef.current = msg.id;
+        setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: "smooth" }), 50);
+      }
+    } finally {
+      setSending(false);
+    }
+  };
+
   const sendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
     if ((!input.trim() && !imageUrl) || !token) return;
@@ -346,6 +369,7 @@ const ChatArea = ({ onSidebarOpen, onRegisterClick, user, token, channel, roomId
           onRegisterClick={onRegisterClick}
           onImageSelect={handleImageSelect}
           onImageRemove={handleImageRemove}
+          onVoiceSend={handleVoiceSend}
         />
       </div>
 

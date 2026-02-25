@@ -1,6 +1,7 @@
 import Icon from "@/components/ui/icon";
 import { Message, Reaction, EMOJI_LIST, avatarBg, formatTime } from "@/components/chat/chatTypes";
 import { User } from "@/hooks/useAuth";
+import VoiceMessage from "@/components/chat/VoiceMessage";
 
 interface Props {
   msg: Message;
@@ -79,6 +80,11 @@ export default function MessageItem({
                     loading="lazy"
                   />
                 </a>
+              </div>
+            )}
+            {msg.voice_url && (
+              <div className="mt-1">
+                <VoiceMessage url={msg.voice_url} />
               </div>
             )}
           </>

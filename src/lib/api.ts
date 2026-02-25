@@ -38,6 +38,10 @@ export const api = {
       req("messages", "POST", token, { content, channel, ...(room_id ? { room_id } : {}), ...(image_url ? { image_url } : {}) }),
     uploadImage: (token: string, image: string) =>
       req("upload_image", "POST", token, { image }),
+    uploadVoice: (token: string, audio: string, ext: string) =>
+      req("upload_voice", "POST", token, { audio, ext }),
+    sendWithVoice: (token: string, channel: string, voice_url: string, room_id?: number) =>
+      req("messages", "POST", token, { content: "", channel, voice_url, ...(room_id ? { room_id } : {}) }),
     remove: (token: string, msg_id: number) =>
       req("delete_msg", "POST", token, { msg_id }),
     edit: (token: string, msg_id: number, content: string) =>

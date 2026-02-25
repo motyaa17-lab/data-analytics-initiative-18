@@ -128,7 +128,7 @@ def handler(event: dict, context) -> dict:
                 if not cur.fetchone(): return err(403, 'Ты не участник этой комнаты')
                 cur.execute(f"UPDATE {schema}.users SET last_seen=now() WHERE id={uid}")
                 cur.execute(
-                    f"SELECT m.id,m.content,m.created_at,u.username,u.favorite_game,m.is_removed,m.user_id,m.edited,u.avatar_url,u.badge,m.image_url "
+                    f"SELECT m.id,m.content,m.created_at,u.username,u.favorite_game,m.is_removed,m.user_id,m.edited,u.avatar_url,u.badge,m.image_url,m.voice_url "
                     f"FROM {schema}.messages m JOIN {schema}.users u ON u.id=m.user_id "
                     f"WHERE m.room_id={room_id} ORDER BY m.created_at ASC LIMIT 100"
                 )
@@ -138,7 +138,7 @@ def handler(event: dict, context) -> dict:
                 if user:
                     cur.execute(f"UPDATE {schema}.users SET last_seen=now() WHERE id={user[0]}")
                 cur.execute(
-                    f"SELECT m.id,m.content,m.created_at,u.username,u.favorite_game,m.is_removed,m.user_id,m.edited,u.avatar_url,u.badge,m.image_url "
+                    f"SELECT m.id,m.content,m.created_at,u.username,u.favorite_game,m.is_removed,m.user_id,m.edited,u.avatar_url,u.badge,m.image_url,m.voice_url "
                     f"FROM {schema}.messages m JOIN {schema}.users u ON u.id=m.user_id "
                     f"WHERE m.channel='{channel}' AND m.room_id IS NULL ORDER BY m.created_at ASC LIMIT 100"
                 )
@@ -147,7 +147,7 @@ def handler(event: dict, context) -> dict:
             reactions = get_reactions(cur, schema, message_ids)
             msgs = []
             for r in rows:
-                mid, content, created_at, username, fav, is_removed, msg_uid, edited, avatar_url, badge, image_url = r
+                mid, content, created_at, username, fav, is_removed, msg_uid, edited, avatar_url, badge, image_url, voice_url = r
                 msgs.append({
                     'id': mid,
                     'content': content if not is_removed else '',
@@ -160,6 +160,7 @@ def handler(event: dict, context) -> dict:
                     'avatar_url': avatar_url or '',
                     'badge': badge or '',
                     'image_url': image_url or '',
+                    'voice_url': voice_url or '',
                     'reactions': reactions.get(mid, [])
                 })
             return resp(200, {'messages': msgs})
@@ -175,22 +176,24 @@ def handler(event: dict, context) -> dict:
 
             content = sanitize(body.get('content') or '')
             image_url = body.get('image_url') or ''
+            voice_url = body.get('voice_url') or ''
             channel = body.get('channel', 'general')
             room_id_str = str(body.get('room_id', ''))
 
-            if not content and not image_url: return err(400, 'Сообщение пустое')
+            if not content and not image_url and not voice_url: return err(400, 'Сообщение пустое')
             if len(content) > 2000: return err(400, 'Максимум 2000 символов')
 
             sc = content.replace("'", "''")
             img_val = f"'{image_url.replace(chr(39), '')}'" if image_url else 'NULL'
+            voice_val = f"'{voice_url.replace(chr(39), '')}'" if voice_url else 'NULL'
             if room_id_str.isdigit():
                 room_id = int(room_id_str)
                 cur.execute(f"SELECT 1 FROM {schema}.room_members WHERE room_id={room_id} AND user_id={uid}")
                 if not cur.fetchone(): return err(403, 'Ты не участник этой комнаты')
-                cur.execute(f"INSERT INTO {schema}.messages(user_id,room_id,content,image_url) VALUES({uid},{room_id},'{sc}',{img_val}) RETURNING id,created_at")
+                cur.execute(f"INSERT INTO {schema}.messages(user_id,room_id,content,image_url,voice_url) VALUES({uid},{room_id},'{sc}',{img_val},{voice_val}) RETURNING id,created_at")
             else:
                 if channel not in VALID_CHANNELS: channel = 'general'
-                cur.execute(f"INSERT INTO {schema}.messages(user_id,channel,content,image_url) VALUES({uid},'{channel}','{sc}',{img_val}) RETURNING id,created_at")
+                cur.execute(f"INSERT INTO {schema}.messages(user_id,channel,content,image_url,voice_url) VALUES({uid},'{channel}','{sc}',{img_val},{voice_val}) RETURNING id,created_at")
 
             msg_id, created_at = cur.fetchone()
             cur.execute(f"SELECT avatar_url, badge FROM {schema}.users WHERE id={uid}")
@@ -202,8 +205,31 @@ def handler(event: dict, context) -> dict:
                 'avatar_url': av_row[0] if av_row and av_row[0] else '',
                 'badge': av_row[1] if av_row and av_row[1] else '',
                 'image_url': image_url,
+                'voice_url': voice_url,
                 'reactions': []
             }})
+
+    # ─── UPLOAD VOICE ────────────────────────────────────────
+
+    if action == 'upload_voice':
+        """Загружает голосовое сообщение (base64 webm/ogg) в S3 и возвращает CDN URL"""
+        user = get_user(cur, schema, token)
+        if not user: return err(401, 'Необходима авторизация')
+        uid = user[0]
+        audio_b64 = body.get('audio')
+        if not audio_b64: return err(400, 'Нет аудио данных')
+        try:
+            audio_data = base64.b64decode(audio_b64)
+        except Exception:
+            return err(400, 'Неверный формат base64')
+        if len(audio_data) > 5 * 1024 * 1024:
+            return err(400, 'Файл слишком большой (макс 5MB)')
+        ext = body.get('ext', 'webm')
+        fname = f"voice/{uid}_{int(time.time())}_{secrets.token_hex(4)}.{ext}"
+        s3 = s3_client()
+        s3.put_object(Bucket='files', Key=fname, Body=audio_data, ContentType=f'audio/{ext}')
+        cdn_url = f"https://cdn.poehali.dev/projects/{os.environ['AWS_ACCESS_KEY_ID']}/bucket/{fname}"
+        return resp(200, {'url': cdn_url})
 
     # ─── DELETE MESSAGE ───────────────────────────────────────
 

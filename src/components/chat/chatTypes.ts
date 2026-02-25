@@ -13,6 +13,7 @@ export interface Message {
   avatar_url?: string;
   badge?: string;
   image_url?: string;
+  voice_url?: string;
   is_removed?: boolean;
   author_id?: number;
   edited?: boolean;
