@@ -16,6 +16,7 @@ export default function SettingsModal({ user, token, onClose, onUpdate }: Props)
   const [saving, setSaving] = useState(false);
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
   const [avatarPreview, setAvatarPreview] = useState<string>(user.avatar_url || "");
+  const [avatarError, setAvatarError] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -30,6 +31,7 @@ export default function SettingsModal({ user, token, onClose, onUpdate }: Props)
     setUploadingAvatar(true);
     setError(null);
     setStatus(null);
+    setAvatarError(false);
     const reader = new FileReader();
     reader.onload = async (ev) => {
       const dataUrl = ev.target?.result as string;
@@ -81,8 +83,13 @@ export default function SettingsModal({ user, token, onClose, onUpdate }: Props)
         {/* Avatar */}
         <div className="flex items-center gap-4">
           <div className="relative group cursor-pointer" onClick={() => fileRef.current?.click()}>
-            {avatarPreview ? (
-              <img src={avatarPreview} alt="avatar" className="w-16 h-16 rounded-full object-cover" />
+            {avatarPreview && !avatarError ? (
+              <img
+                src={avatarPreview}
+                alt="avatar"
+                className="w-16 h-16 rounded-full object-cover"
+                onError={() => setAvatarError(true)}
+              />
             ) : (
               <div
                 className="w-16 h-16 rounded-full flex items-center justify-center text-white font-bold text-xl flex-shrink-0"
