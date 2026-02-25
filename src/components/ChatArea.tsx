@@ -260,9 +260,9 @@ const ChatArea = ({ onSidebarOpen, onRegisterClick, user, token, channel, roomId
 
   return (
     <div className="flex-1 flex min-h-0 overflow-hidden" onClick={() => { setEmojiPickerFor(null); setContextMenu(null); }}>
-      <div className="flex-1 flex flex-col min-h-0 min-w-0">
+      <div className="flex-1 flex flex-col min-h-0 min-w-0 chat-bg">
         {/* Header */}
-        <div className="h-14 md:h-12 bg-[#36393f] border-b border-[#202225] flex items-center px-3 gap-2 flex-shrink-0">
+        <div className="h-14 md:h-12 bg-black/30 backdrop-blur-sm border-b border-white/10 flex items-center px-3 gap-2 flex-shrink-0">
           <Button variant="ghost" className="lg:hidden text-[#8e9297] hover:text-[#dcddde] hover:bg-[#40444b] w-11 h-11 p-0 flex-shrink-0" onClick={onSidebarOpen}>
             <Menu className="w-6 h-6" />
           </Button>

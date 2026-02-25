@@ -24,11 +24,11 @@ export default function DMFriendsList({
   return (
     <div className="fixed inset-0 z-50 flex items-stretch justify-start bg-black/60" onClick={onClose}>
       <div
-        className="relative flex flex-col bg-[#36393f] w-full max-w-sm h-full shadow-2xl"
+        className="relative flex flex-col chat-bg w-full max-w-sm h-full shadow-2xl"
         onClick={e => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="flex items-center justify-between px-4 py-3 bg-[#2f3136] border-b border-black/20">
+        <div className="flex items-center justify-between px-4 py-3 bg-black/30 backdrop-blur-sm border-b border-white/10">
           <span className="font-semibold text-white text-sm">Личные сообщения</span>
           <button className="text-[#b9bbbe] hover:text-white transition-colors" onClick={onClose}>
             <Icon name="X" size={18} />

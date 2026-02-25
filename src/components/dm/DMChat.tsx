@@ -73,11 +73,11 @@ export default function DMChat({
       onClick={() => { onClose(); onSetContextMenu(null); }}
     >
       <div
-        className="relative flex flex-col bg-[#36393f] w-full max-w-md h-full shadow-2xl"
+        className="relative flex flex-col chat-bg w-full max-w-md h-full shadow-2xl"
         onClick={e => { e.stopPropagation(); onSetContextMenu(null); }}
       >
         {/* Header */}
-        <div className="flex items-center gap-3 px-4 py-3 bg-[#2f3136] border-b border-black/20">
+        <div className="flex items-center gap-3 px-4 py-3 bg-black/30 backdrop-blur-sm border-b border-white/10">
           <button className="text-[#b9bbbe] hover:text-white transition-colors p-1" onClick={onBack}>
             <Icon name="ArrowLeft" size={18} />
           </button>

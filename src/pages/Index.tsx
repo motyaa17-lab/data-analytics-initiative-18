@@ -105,7 +105,7 @@ const Index = () => {
   };
 
   return (
-    <div className="h-[100dvh] bg-[#36393f] text-white flex flex-col overflow-hidden">
+    <div className="h-[100dvh] chat-bg text-white flex flex-col overflow-hidden">
       {showRegModal && <RegisterModal onClose={() => setShowRegModal(false)} />}
       {showLoginModal && (
         <LoginModal onClose={() => setShowLoginModal(false)} onSuccess={login} onRegisterClick={() => setShowRegModal(true)} />
