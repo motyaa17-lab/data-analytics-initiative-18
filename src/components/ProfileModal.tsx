@@ -38,8 +38,10 @@ export default function ProfileModal({ username, onClose, onSendFriend, onOpenDM
   const [profile, setProfile] = useState<ProfileData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [avatarError, setAvatarError] = useState(false);
 
   useEffect(() => {
+    setAvatarError(false);
     api.profile.get(username).then(data => {
       setLoading(false);
       if (data.error) setError(data.error as string);
@@ -48,31 +50,33 @@ export default function ProfileModal({ username, onClose, onSendFriend, onOpenDM
   }, [username]);
 
   const isOwnProfile = profile && currentUserId === profile.id;
+  const showAvatar = profile?.avatar_url && !avatarError;
 
   return (
     <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/60 p-4" onClick={onClose}>
       <div
-        className="bg-[#36393f] rounded-xl w-full max-w-xs shadow-2xl overflow-hidden"
+        className="bg-[#36393f] rounded-xl w-full max-w-xs shadow-2xl"
         onClick={e => e.stopPropagation()}
       >
         {/* Header banner */}
-        <div className="h-20 bg-gradient-to-r from-[#5865f2] to-[#7c3aed] relative">
+        <div className="h-20 bg-gradient-to-r from-[#5865f2] to-[#7c3aed] relative rounded-t-xl overflow-hidden flex-shrink-0">
           <button
             onClick={onClose}
-            className="absolute top-2 right-2 text-white/70 hover:text-white transition-colors"
+            className="absolute top-2 right-2 text-white/70 hover:text-white transition-colors z-10"
           >
             <Icon name="X" size={18} />
           </button>
         </div>
 
         <div className="px-5 pb-5">
-          {/* Avatar */}
-          <div className="-mt-10 mb-3">
-            {profile?.avatar_url ? (
+          {/* Avatar — выступает над баннером */}
+          <div className="relative -mt-10 mb-3 w-fit">
+            {showAvatar ? (
               <img
-                src={profile.avatar_url}
-                alt={profile.username}
+                src={profile!.avatar_url}
+                alt={profile!.username}
                 className="w-20 h-20 rounded-full border-4 border-[#36393f] object-cover"
+                onError={() => setAvatarError(true)}
               />
             ) : (
               <div

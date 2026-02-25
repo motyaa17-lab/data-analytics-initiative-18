@@ -43,7 +43,16 @@ export async function apiSendDM(toId: number, content: string, token: string) {
 
 export interface Friend { id: number; username: string; favorite_game: string; }
 export interface FriendRequest { request_id: number; user_id: number; username: string; favorite_game: string; }
-export interface DMessage { id: number; content: string; created_at: string; username: string; is_removed?: boolean; }
+export interface DMessage { id: number; content: string; created_at: string; username: string; is_removed?: boolean; edited?: boolean; }
+
+export async function apiEditDM(msgId: number, content: string, token: string) {
+  const res = await fetch(`${BASE}?action=edit_dm`, {
+    method: "POST",
+    headers: authHeaders(token),
+    body: JSON.stringify({ msg_id: msgId, content }),
+  });
+  return res.json();
+}
 export interface DMContextMenu { msgId: number; x: number; y: number; isMe: boolean; }
 
 export type Tab = "friends" | "requests" | "add";

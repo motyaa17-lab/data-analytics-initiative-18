@@ -1,7 +1,7 @@
-import { RefObject } from "react";
+import { RefObject, useState, useRef, useEffect } from "react";
 import Icon from "@/components/ui/icon";
 import ProfileModal from "@/components/ProfileModal";
-import { Friend, DMessage, DMContextMenu, avatarColor, BASE, authHeaders } from "@/components/dm/dmTypes";
+import { Friend, DMessage, DMContextMenu, avatarColor, BASE, authHeaders, apiEditDM } from "@/components/dm/dmTypes";
 import { User } from "@/hooks/useAuth";
 
 interface Props {
@@ -34,6 +34,39 @@ export default function DMChat({
   onBack, onClose, onMsgTextChange, onSend, onKey, onScrollToBottom,
   onSetContextMenu, onSetProfileUsername, onDeleteDM, setMessages,
 }: Props) {
+  const [editingMsg, setEditingMsg] = useState<{ id: number; content: string } | null>(null);
+  const [editText, setEditText] = useState("");
+  const editInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (editingMsg) editInputRef.current?.focus();
+  }, [editingMsg]);
+
+  const handleStartEdit = (msgId: number) => {
+    const msg = messages.find(m => m.id === msgId);
+    if (!msg) return;
+    setEditingMsg({ id: msg.id, content: msg.content });
+    setEditText(msg.content);
+    onSetContextMenu(null);
+  };
+
+  const handleConfirmEdit = async () => {
+    if (!editingMsg || !editText.trim()) return;
+    const data = await apiEditDM(editingMsg.id, editText.trim(), token);
+    if (data.ok) {
+      setMessages(prev => prev.map(m =>
+        m.id === editingMsg.id ? { ...m, content: editText.trim(), edited: true } : m
+      ));
+    }
+    setEditingMsg(null);
+    setEditText("");
+  };
+
+  const handleEditKey = (e: React.KeyboardEvent) => {
+    if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleConfirmEdit(); }
+    if (e.key === "Escape") { setEditingMsg(null); setEditText(""); }
+  };
+
   return (
     <div
       className="fixed inset-0 z-50 flex items-stretch justify-start bg-black/60"
@@ -45,10 +78,7 @@ export default function DMChat({
       >
         {/* Header */}
         <div className="flex items-center gap-3 px-4 py-3 bg-[#2f3136] border-b border-black/20">
-          <button
-            className="text-[#b9bbbe] hover:text-white transition-colors p-1"
-            onClick={onBack}
-          >
+          <button className="text-[#b9bbbe] hover:text-white transition-colors p-1" onClick={onBack}>
             <Icon name="ArrowLeft" size={18} />
           </button>
           <div
@@ -81,6 +111,7 @@ export default function DMChat({
             )}
             {messages.map(msg => {
               const isMe = msg.username === user.username;
+              const isEditing = editingMsg?.id === msg.id;
               return (
                 <div
                   key={msg.id}
@@ -103,14 +134,32 @@ export default function DMChat({
                       <div className="px-3 py-2 rounded-2xl text-sm bg-[#2f3136] text-[#72767d] italic">
                         сообщение удалено
                       </div>
+                    ) : isEditing ? (
+                      <div className="flex gap-1.5 items-center">
+                        <input
+                          ref={editInputRef}
+                          value={editText}
+                          onChange={e => setEditText(e.target.value)}
+                          onKeyDown={handleEditKey}
+                          className="bg-[#40444b] text-white text-sm px-2 py-1.5 rounded-lg outline-none focus:ring-1 focus:ring-[#5865f2] w-full"
+                          onClick={e => e.stopPropagation()}
+                        />
+                        <button onClick={handleConfirmEdit} className="text-[#3ba55c] hover:text-white transition-colors flex-shrink-0">
+                          <Icon name="Check" size={14} />
+                        </button>
+                        <button onClick={() => { setEditingMsg(null); setEditText(""); }} className="text-[#72767d] hover:text-white transition-colors flex-shrink-0">
+                          <Icon name="X" size={14} />
+                        </button>
+                      </div>
                     ) : (
                       <div className={`px-3 py-2 rounded-2xl text-sm break-words ${
                         isMe ? "bg-[#5865f2] text-white rounded-br-sm" : "bg-[#40444b] text-[#dcddde] rounded-bl-sm"
                       }`}>
                         {msg.content}
+                        {msg.edited && <span className="text-white/50 text-[10px] ml-1 italic">(изм.)</span>}
                       </div>
                     )}
-                    {isMe && !msg.is_removed && (
+                    {isMe && !msg.is_removed && !isEditing && (
                       <button
                         onClick={() => onDeleteDM(msg.id)}
                         className="opacity-0 group-hover:opacity-100 text-[#72767d] hover:text-[#ed4245] transition-all text-xs self-end"
@@ -173,6 +222,13 @@ export default function DMChat({
             </button>
             {dmContextMenu.isMe && (
               <>
+                <button
+                  onClick={() => handleStartEdit(dmContextMenu.msgId)}
+                  className="w-full flex items-center gap-2.5 px-3 py-2 text-[#dcddde] hover:bg-[#5865f2] hover:text-white text-sm transition-colors"
+                >
+                  <Icon name="Pencil" size={14} />
+                  Изменить
+                </button>
                 <div className="border-t border-[#202225] my-1" />
                 <button
                   onClick={() => {
