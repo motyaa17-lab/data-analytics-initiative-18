@@ -94,12 +94,14 @@ export default function SettingsModal({ user, token, onClose, onUpdate }: Props)
       tick();
     } catch (e: unknown) {
       const name = e instanceof Error ? e.name : "";
+      const message = e instanceof Error ? e.message : String(e);
+      console.error("[MIC ERROR]", name, message, e);
       if (name === "NotAllowedError" || name === "PermissionDeniedError") {
         setMicError("Доступ к микрофону запрещён. Разреши его в настройках браузера (🔒 в адресной строке).");
       } else if (name === "NotFoundError" || name === "DevicesNotFoundError") {
         setMicError("Микрофон не найден. Проверь, подключён ли он.");
       } else {
-        setMicError("Не удалось подключиться к микрофону. Проверь, не используется ли он другим приложением.");
+        setMicError(`Ошибка: ${name || "unknown"} — ${message}`);
       }
     }
   };
