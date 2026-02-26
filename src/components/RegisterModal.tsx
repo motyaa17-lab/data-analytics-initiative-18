@@ -2,7 +2,7 @@ import { useState } from "react";
 import { X, Eye, EyeOff } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
-const REGISTER_URL = "https://functions.poehali.dev/0300ad13-eaa5-497d-8128-f65bcf96da2a";
+const REGISTER_URL = "/api/register";
 
 interface RegisterModalProps {
   onClose: () => void;
