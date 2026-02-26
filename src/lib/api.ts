@@ -1,4 +1,4 @@
-const BASE = "https://functions.poehali.dev/b1a16ec3-c9d7-4e46-bb90-e30137e5c534";
+const BASE = "/api";
 
 function headers(method: string, token?: string | null) {
   const h: Record<string, string> = {};
