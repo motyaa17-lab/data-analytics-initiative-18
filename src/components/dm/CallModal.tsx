@@ -10,12 +10,21 @@ export interface CallInfo {
   state: CallState;
 }
 
+export interface CallSignal {
+  id: number;
+  from_user_id: number;
+  type: string;
+  payload: string;
+}
+
 interface Props {
   call: CallInfo;
   token: string;
   userId: number;
   username: string;
   onEnd: () => void;
+  externalSignals?: CallSignal[];
+  onSignalsProcessed?: () => void;
 }
 
 const ICE_SERVERS = [
@@ -28,7 +37,7 @@ const ICE_SERVERS = [
   { urls: "turns:global.relay.metered.ca:443?transport=tcp", username: "openrelayproject", credential: "openrelayproject" },
 ];
 
-export default function CallModal({ call, token, userId, username, onEnd }: Props) {
+export default function CallModal({ call, token, userId, username, onEnd, externalSignals, onSignalsProcessed }: Props) {
   const [state, setState] = useState<CallState>(call.state);
   const [muted, setMuted] = useState(false);
   const [duration, setDuration] = useState(0);
@@ -194,49 +203,62 @@ export default function CallModal({ call, token, userId, username, onEnd }: Prop
     }, 45000);
   }, [createPC, sendSignal, cleanup]);
 
-  // Polling сигналов — используем ref для состояния чтобы не было stale closure
+  // Обработка массива сигналов — вынесена отдельно чтобы использовать и из polling, и из externalSignals
+  const processSignals = useCallback(async (signals: CallSignal[]) => {
+    if (endedRef.current) return;
+    for (const sig of signals) {
+      if (sig.from_user_id !== call.friendId) continue;
+      const pc = pcRef.current;
+      const curState = stateRef.current;
+
+      if (sig.type === "answer" && pc && pc.signalingState === "have-local-offer") {
+        await pc.setRemoteDescription(new RTCSessionDescription(JSON.parse(sig.payload)));
+        hasRemoteDescRef.current = true;
+        await flushIceQueue(pc);
+
+      } else if (sig.type === "ice") {
+        const candidate = new RTCIceCandidate(JSON.parse(sig.payload));
+        if (pc && hasRemoteDescRef.current) {
+          try { await pc.addIceCandidate(candidate); } catch { /* ignore */ }
+        } else {
+          iceCandidateQueueRef.current.push(candidate);
+        }
+
+      } else if (sig.type === "hangup" || sig.type === "reject" || sig.type === "busy") {
+        cleanup();
+
+      } else if (sig.type === "offer" && (curState === "incoming" || curState === "calling" || (curState as string) === "connecting")) {
+        await answerCall(sig.payload);
+      }
+    }
+  }, [call.friendId, cleanup, answerCall]);
+
   const pollSignals = useCallback(async () => {
     if (endedRef.current) return;
     try {
       const res = await fetch(`${BASE}?action=call_signal`, { headers: authHeaders(token) });
       const data = await res.json();
-      if (!data.signals?.length) return;
-
-      for (const sig of data.signals) {
-        if (sig.from_user_id !== call.friendId) continue;
-        const pc = pcRef.current;
-        const curState = stateRef.current;
-
-        if (sig.type === "answer" && pc && pc.signalingState === "have-local-offer") {
-          await pc.setRemoteDescription(new RTCSessionDescription(JSON.parse(sig.payload)));
-          hasRemoteDescRef.current = true;
-          await flushIceQueue(pc);
-
-        } else if (sig.type === "ice") {
-          const candidate = new RTCIceCandidate(JSON.parse(sig.payload));
-          if (pc && hasRemoteDescRef.current) {
-            try { await pc.addIceCandidate(candidate); } catch { /* ignore */ }
-          } else {
-            // Буферизируем — remoteDescription ещё не установлено
-            iceCandidateQueueRef.current.push(candidate);
-          }
-
-        } else if (sig.type === "hangup" || sig.type === "reject" || sig.type === "busy") {
-          cleanup();
-
-        } else if (sig.type === "offer" && (curState === "incoming" || curState === "calling" || (curState as string) === "connecting")) {
-          await answerCall(sig.payload);
-        }
-      }
-    } catch { /* ignore network errors */ }
-  }, [token, call.friendId, cleanup, answerCall]);
+      if (data.signals?.length) await processSignals(data.signals);
+    } catch { /* ignore */ }
+  }, [token, processSignals]);
 
   useEffect(() => {
     endedRef.current = false;
     if (call.state === "calling") startCall();
-    pollRef.current = setInterval(pollSignals, 800);
+    // Если нет внешнего источника сигналов — используем внутренний polling
+    if (!externalSignals) {
+      pollRef.current = setInterval(pollSignals, 800);
+    }
     return () => { if (pollRef.current) clearInterval(pollRef.current); };
   }, []);
+
+  // Обрабатываем внешние сигналы (из DirectMessages) и сразу сбрасываем
+  useEffect(() => {
+    if (externalSignals && externalSignals.length > 0) {
+      processSignals(externalSignals);
+      onSignalsProcessed?.();
+    }
+  }, [externalSignals]);
 
   const handleHangup = async () => {
     await sendSignal("hangup");

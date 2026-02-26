@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { User } from "@/hooks/useAuth";
 import DMChat from "@/components/dm/DMChat";
 import DMFriendsList from "@/components/dm/DMFriendsList";
-import CallModal, { CallInfo } from "@/components/dm/CallModal";
+import CallModal, { CallInfo, CallSignal } from "@/components/dm/CallModal";
 import {
   Friend, FriendRequest, DMessage, DMContextMenu, Tab,
   apiFriends, apiSendFriendReq, apiRespondReq, apiGetDM, apiSendDM,
@@ -33,11 +33,18 @@ export default function DirectMessages({ user, token, onClose, seenKey = "frikor
   const [profileUsername, setProfileUsername] = useState<string | null>(null);
   const [activeCall, setActiveCall] = useState<CallInfo | null>(null);
   const [friendTyping, setFriendTyping] = useState(false);
+  const [pendingSignals, setPendingSignals] = useState<CallSignal[]>([]);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const callPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const typingPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const activeCallRef = useRef<CallInfo | null>(null);
+  const friendsRef = useRef<Friend[]>([]);
+
+  // Синхронизируем refs
+  useEffect(() => { activeCallRef.current = activeCall; }, [activeCall]);
+  useEffect(() => { friendsRef.current = friends; }, [friends]);
 
   const uid = (user as unknown as { id: number }).id;
 
@@ -74,18 +81,32 @@ export default function DirectMessages({ user, token, onClose, seenKey = "frikor
     if (data.requests) setRequests(data.requests);
   };
 
-  const checkIncomingCalls = useCallback(async () => {
-    if (activeCall) return;
-    const res = await fetch(`${BASE}?action=call_signal`, { headers: authHeaders(token) });
-    const data = await res.json();
-    const callSig = data.signals?.find((s: { type: string }) => s.type === "call");
-    if (callSig) {
-      const caller = friends.find((f: Friend) => f.id === callSig.from_user_id);
-      if (caller) {
-        setActiveCall({ friendId: caller.id, friendName: caller.username, state: "incoming" });
+  const pollCallSignals = useCallback(async () => {
+    try {
+      const res = await fetch(`${BASE}?action=call_signal`, { headers: authHeaders(token) });
+      const data = await res.json();
+      if (!data.signals?.length) return;
+
+      const signals: CallSignal[] = data.signals;
+
+      if (activeCallRef.current) {
+        // Есть активный звонок — передаём сигналы в CallModal
+        setPendingSignals(signals);
+      } else {
+        // Нет звонка — ищем входящий вызов
+        const callSig = signals.find(s => s.type === "call");
+        if (callSig) {
+          const caller = friendsRef.current.find(f => f.id === callSig.from_user_id);
+          if (caller) {
+            // Сохраняем остальные сигналы (offer может уже прийти вместе с call)
+            const rest = signals.filter(s => s.id !== callSig.id);
+            if (rest.length) setPendingSignals(rest);
+            setActiveCall({ friendId: caller.id, friendName: caller.username, state: "incoming" });
+          }
+        }
       }
-    }
-  }, [activeCall, token, friends]);
+    } catch { /* ignore */ }
+  }, [token]);
 
   useEffect(() => {
     loadFriends();
@@ -93,9 +114,9 @@ export default function DirectMessages({ user, token, onClose, seenKey = "frikor
   }, []);
 
   useEffect(() => {
-    callPollRef.current = setInterval(checkIncomingCalls, 2000);
+    callPollRef.current = setInterval(pollCallSignals, 800);
     return () => { if (callPollRef.current) clearInterval(callPollRef.current); };
-  }, [checkIncomingCalls]);
+  }, [pollCallSignals]);
 
   useEffect(() => {
     if (!activeFriend) return;
@@ -219,7 +240,9 @@ export default function DirectMessages({ user, token, onClose, seenKey = "frikor
             token={token}
             userId={uid}
             username={user.username}
-            onEnd={() => setActiveCall(null)}
+            onEnd={() => { setActiveCall(null); setPendingSignals([]); }}
+            externalSignals={pendingSignals}
+            onSignalsProcessed={() => setPendingSignals([])}
           />
         )}
         <DMChat
@@ -260,7 +283,9 @@ export default function DirectMessages({ user, token, onClose, seenKey = "frikor
           token={token}
           userId={uid}
           username={user.username}
-          onEnd={() => setActiveCall(null)}
+          onEnd={() => { setActiveCall(null); setPendingSignals([]); }}
+          externalSignals={pendingSignals}
+          onSignalsProcessed={() => setPendingSignals([])}
         />
       )}
       <DMFriendsList
