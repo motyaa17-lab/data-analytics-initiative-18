@@ -97,7 +97,11 @@ export default function SettingsModal({ user, token, onClose, onUpdate }: Props)
       const message = e instanceof Error ? e.message : String(e);
       console.error("[MIC ERROR]", name, message, e);
       if (name === "NotAllowedError" || name === "PermissionDeniedError") {
-        setMicError("Доступ к микрофону запрещён. Разреши его в настройках браузера (🔒 в адресной строке).");
+        const isIframe = window.self !== window.top;
+        setMicError(isIframe
+          ? "Микрофон недоступен в режиме предпросмотра. Открой сайт в отдельной вкладке."
+          : "Доступ к микрофону запрещён. Разреши его в настройках браузера (🔒 в адресной строке)."
+        );
       } else if (name === "NotFoundError" || name === "DevicesNotFoundError") {
         setMicError("Микрофон не найден. Проверь, подключён ли он.");
       } else {
