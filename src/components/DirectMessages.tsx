@@ -8,6 +8,7 @@ import {
   apiFriends, apiSendFriendReq, apiRespondReq, apiGetDM, apiSendDM,
   authHeaders, BASE, getSeenMap, markSeen,
 } from "@/components/dm/dmTypes";
+import { api } from "@/lib/api";
 
 interface Props {
   user: User;
@@ -31,10 +32,12 @@ export default function DirectMessages({ user, token, onClose, seenKey = "frikor
   const [dmContextMenu, setDmContextMenu] = useState<DMContextMenu | null>(null);
   const [profileUsername, setProfileUsername] = useState<string | null>(null);
   const [activeCall, setActiveCall] = useState<CallInfo | null>(null);
+  const [friendTyping, setFriendTyping] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const callPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const typingPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const uid = (user as unknown as { id: number }).id;
 
@@ -122,7 +125,19 @@ export default function DirectMessages({ user, token, onClose, seenKey = "frikor
     };
     load(true);
     pollRef.current = setInterval(() => load(false), 3000);
-    return () => { if (pollRef.current) clearInterval(pollRef.current); };
+
+    const checkTyping = async () => {
+      const data = await api.typing.get(token, undefined, activeFriend.id);
+      setFriendTyping(Array.isArray(data.typing) && data.typing.length > 0);
+    };
+    checkTyping();
+    typingPollRef.current = setInterval(checkTyping, 3000);
+
+    return () => {
+      if (pollRef.current) clearInterval(pollRef.current);
+      if (typingPollRef.current) clearInterval(typingPollRef.current);
+      setFriendTyping(false);
+    };
   }, [activeFriend]);
 
   useEffect(() => {
@@ -231,6 +246,7 @@ export default function DirectMessages({ user, token, onClose, seenKey = "frikor
           setMessages={setMessages}
           onVoiceSend={handleVoiceSendDM}
           onCall={handleStartCall}
+          typingUser={friendTyping}
         />
       </>
     );

@@ -23,6 +23,8 @@
     {"name": "Upload image no auth", "method": "POST", "path": "/?action=upload_image", "body": {"image": "data:image/png;base64,abc"}, "expectedStatus": 401},
     {"name": "Upload voice no auth", "method": "POST", "path": "/?action=upload_voice", "body": {"audio": "abc"}, "expectedStatus": 401},
     {"name": "Call signal GET no auth", "method": "GET", "path": "/?action=call_signal", "expectedStatus": 401},
-    {"name": "Call signal POST no auth", "method": "POST", "path": "/?action=call_signal", "body": {"to": 1, "type": "call"}, "expectedStatus": 401}
+    {"name": "Call signal POST no auth", "method": "POST", "path": "/?action=call_signal", "body": {"to": 1, "type": "call"}, "expectedStatus": 401},
+    {"name": "Typing start no auth", "method": "POST", "path": "/?action=typing_start", "body": {"channel": "general"}, "expectedStatus": 401},
+    {"name": "Typing get no auth", "method": "GET", "path": "/?action=typing_get&channel=general", "expectedStatus": 401}
   ]
 }

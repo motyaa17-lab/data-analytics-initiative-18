@@ -1,12 +1,14 @@
-import { RefObject, useRef, useState, useEffect } from "react";
+import { RefObject, useRef, useState, useEffect, useCallback } from "react";
 import { Send, X, ImagePlus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import Icon from "@/components/ui/icon";
 import { User } from "@/hooks/useAuth";
 import { Message } from "@/components/chat/chatTypes";
+import { api } from "@/lib/api";
 
 interface Props {
   user: User | null;
+  token: string | null;
   input: string;
   sending: boolean;
   replyTo: Message | null;
@@ -22,21 +24,31 @@ interface Props {
   onImageSelect: (file: File) => void;
   onImageRemove: () => void;
   onVoiceSend: (blob: Blob, ext: string) => void;
+  channel?: string;
+  dmWith?: number;
 }
 
 export default function MessageInput({
-  user, input, sending, replyTo, editingMsg, label,
+  user, token, input, sending, replyTo, editingMsg, label,
   inputRef, imagePreview, imageUploading,
   onInputChange, onSubmit, onCancelReplyOrEdit, onRegisterClick,
   onImageSelect, onImageRemove, onVoiceSend,
+  channel, dmWith,
 }: Props) {
   const fileRef = useRef<HTMLInputElement>(null);
   const mediaRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const typingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const [recording, setRecording] = useState(false);
   const [recSeconds, setRecSeconds] = useState(0);
+
+  const sendTyping = useCallback(() => {
+    if (!token || !user) return;
+    if (channel) api.typing.send(token, channel);
+    else if (dmWith) api.typing.send(token, undefined, dmWith);
+  }, [token, user, channel, dmWith]);
 
   useEffect(() => {
     return () => {
@@ -193,7 +205,14 @@ export default function MessageInput({
               <input
                 ref={inputRef}
                 value={input}
-                onChange={e => onInputChange(e.target.value)}
+                onChange={e => {
+                  onInputChange(e.target.value);
+                  if (e.target.value) {
+                    sendTyping();
+                    if (typingTimerRef.current) clearTimeout(typingTimerRef.current);
+                    typingTimerRef.current = setTimeout(sendTyping, 2500);
+                  }
+                }}
                 placeholder={editingMsg ? "Редактировать сообщение..." : `Написать в #${label}...`}
                 disabled={sending}
                 className="flex-1 bg-[#40444b] text-white placeholder-[#72767d] rounded-lg px-3 py-3 text-sm outline-none focus:ring-1 focus:ring-[#5865f2] disabled:opacity-60 min-h-[44px]"

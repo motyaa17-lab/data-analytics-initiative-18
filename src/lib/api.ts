@@ -93,6 +93,15 @@ export const api = {
     remove: (token: string, msg_id: number) =>
       req("delete_dm", "POST", token, { msg_id }),
   },
+  typing: {
+    send: (token: string, channel?: string, dm_with?: number) =>
+      req("typing_start", "POST", token, { ...(channel ? { channel } : {}), ...(dm_with ? { dm_with } : {}) }),
+    get: (token: string, channel?: string, dm_with?: number) =>
+      req("typing_get", "GET", token, undefined, {
+        ...(channel ? { channel } : {}),
+        ...(dm_with ? { dm_with: String(dm_with) } : {}),
+      }),
+  },
   admin: {
     stats: (token: string) => req("admin_stats", "GET", token),
     logs: (token: string, limit = 50, level = "") => {

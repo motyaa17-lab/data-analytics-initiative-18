@@ -43,6 +43,7 @@ const ChatArea = ({ onSidebarOpen, onRegisterClick, user, token, channel, roomId
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [imageUrl, setImageUrl] = useState<string | null>(null);
   const [imageUploading, setImageUploading] = useState(false);
+  const [typingUsers, setTypingUsers] = useState<string[]>([]);
   const lastMsgIdRef = useRef<number | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
@@ -95,15 +96,23 @@ const ChatArea = ({ onSidebarOpen, onRegisterClick, user, token, channel, roomId
     if (Array.isArray(data.users)) setOnlineUsers(data.users as OnlineUser[]);
   }, []);
 
+  const fetchTyping = useCallback(async () => {
+    if (!token) return;
+    const data = await api.typing.get(token, channel);
+    if (Array.isArray(data.typing)) setTypingUsers(data.typing as string[]);
+  }, [token, channel]);
+
   useEffect(() => {
     setMessages([]);
     setNewMsgCount(0);
+    setTypingUsers([]);
     lastMsgIdRef.current = null;
     setReplyTo(null);
     setEditingMsg(null);
     fetchMessages();
     fetchOnline();
-    const interval = setInterval(() => { fetchMessages(); fetchOnline(); }, 5000);
+    fetchTyping();
+    const interval = setInterval(() => { fetchMessages(); fetchOnline(); fetchTyping(); }, 3000);
     return () => clearInterval(interval);
   }, [channel, roomId]);
 
@@ -353,8 +362,26 @@ const ChatArea = ({ onSidebarOpen, onRegisterClick, user, token, channel, roomId
           )}
         </div>
 
+        {typingUsers.length > 0 && (
+          <div className="px-4 pb-1 flex items-center gap-1.5 text-xs text-[#b9bbbe]">
+            <span className="flex gap-0.5 items-end">
+              <span className="w-1 h-1 rounded-full bg-[#b9bbbe] animate-bounce" style={{ animationDelay: "0ms" }} />
+              <span className="w-1 h-1 rounded-full bg-[#b9bbbe] animate-bounce" style={{ animationDelay: "150ms" }} />
+              <span className="w-1 h-1 rounded-full bg-[#b9bbbe] animate-bounce" style={{ animationDelay: "300ms" }} />
+            </span>
+            <span>
+              {typingUsers.length === 1
+                ? <><strong>{typingUsers[0]}</strong> печатает...</>
+                : typingUsers.length === 2
+                ? <><strong>{typingUsers[0]}</strong> и <strong>{typingUsers[1]}</strong> печатают...</>
+                : <><strong>{typingUsers.slice(0, -1).join(", ")}</strong> и <strong>{typingUsers[typingUsers.length - 1]}</strong> печатают...</>
+              }
+            </span>
+          </div>
+        )}
         <MessageInput
           user={user}
+          token={token}
           input={input}
           sending={sending}
           replyTo={replyTo}
@@ -370,6 +397,7 @@ const ChatArea = ({ onSidebarOpen, onRegisterClick, user, token, channel, roomId
           onImageSelect={handleImageSelect}
           onImageRemove={handleImageRemove}
           onVoiceSend={handleVoiceSend}
+          channel={channel}
         />
       </div>
 

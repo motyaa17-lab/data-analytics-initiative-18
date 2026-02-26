@@ -794,4 +794,40 @@ def handler(event: dict, context) -> dict:
             cur.execute(f"DELETE FROM {schema}.call_signals WHERE created_at < now()-interval '60 seconds'")
             return resp(200, {'signals': signals})
 
+    # ─── TYPING INDICATORS ───────────────────────────────────
+
+    if action == 'typing_start':
+        user = get_user(cur, schema, token)
+        if not user: return err(401, 'Unauthorized')
+        uid, uname = user[0], user[1]
+        channel = body.get('channel')
+        dm_with = body.get('dm_with')
+        if channel:
+            ch_safe = channel.replace("'", "''")
+            cur.execute(f"DELETE FROM {schema}.typing_indicators WHERE user_id={uid} AND channel='{ch_safe}'")
+            cur.execute(f"INSERT INTO {schema}.typing_indicators(user_id,username,channel,dm_with,updated_at) VALUES({uid},'{uname}','{ch_safe}',NULL,now())")
+        elif dm_with:
+            cur.execute(f"DELETE FROM {schema}.typing_indicators WHERE user_id={uid} AND dm_with={dm_with}")
+            cur.execute(f"INSERT INTO {schema}.typing_indicators(user_id,username,channel,dm_with,updated_at) VALUES({uid},'{uname}',NULL,{dm_with},now())")
+        else:
+            return err(400, 'channel or dm_with required')
+        return resp(200, {'ok': True})
+
+    if action == 'typing_get':
+        user = get_user(cur, schema, token)
+        if not user: return err(401, 'Unauthorized')
+        uid = user[0]
+        channel = params.get('channel')
+        dm_with = params.get('dm_with')
+        cur.execute(f"DELETE FROM {schema}.typing_indicators WHERE updated_at < now()-interval '5 seconds'")
+        if channel:
+            ch_safe = channel.replace("'", "''")
+            cur.execute(f"SELECT username FROM {schema}.typing_indicators WHERE channel='{ch_safe}' AND user_id != {uid}")
+        elif dm_with:
+            cur.execute(f"SELECT username FROM {schema}.typing_indicators WHERE dm_with={uid} AND user_id={dm_with}")
+        else:
+            return err(400, 'channel or dm_with required')
+        rows = cur.fetchall()
+        return resp(200, {'typing': [r[0] for r in rows]})
+
     return err(404, 'Not found')

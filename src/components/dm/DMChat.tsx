@@ -1,9 +1,10 @@
-import { RefObject, useState, useRef, useEffect } from "react";
+import { RefObject, useState, useRef, useEffect, useCallback } from "react";
 import Icon from "@/components/ui/icon";
 import ProfileModal from "@/components/ProfileModal";
 import { Friend, DMessage, DMContextMenu, avatarColor, BASE, authHeaders, apiEditDM } from "@/components/dm/dmTypes";
 import { User } from "@/hooks/useAuth";
 import VoiceMessage from "@/components/chat/VoiceMessage";
+import { api } from "@/lib/api";
 
 interface Props {
   user: User;
@@ -29,13 +30,14 @@ interface Props {
   setMessages: React.Dispatch<React.SetStateAction<DMessage[]>>;
   onVoiceSend: (blob: Blob, ext: string) => void;
   onCall: () => void;
+  typingUser: boolean;
 }
 
 export default function DMChat({
   user, token, uid, activeFriend, messages, msgText, newMsgCount,
   dmContextMenu, profileUsername, scrollContainerRef, messagesEndRef,
   onBack, onClose, onMsgTextChange, onSend, onKey, onScrollToBottom,
-  onSetContextMenu, onSetProfileUsername, onDeleteDM, setMessages, onVoiceSend, onCall,
+  onSetContextMenu, onSetProfileUsername, onDeleteDM, setMessages, onVoiceSend, onCall, typingUser,
 }: Props) {
   const [editingMsg, setEditingMsg] = useState<{ id: number; content: string } | null>(null);
   const [editText, setEditText] = useState("");
@@ -43,8 +45,13 @@ export default function DMChat({
   const mediaRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const typingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [recording, setRecording] = useState(false);
   const [recSeconds, setRecSeconds] = useState(0);
+
+  const sendTyping = useCallback(() => {
+    api.typing.send(token, undefined, activeFriend.id);
+  }, [token, activeFriend.id]);
 
   useEffect(() => {
     return () => {
@@ -256,6 +263,18 @@ export default function DMChat({
           )}
         </div>
 
+        {/* Typing indicator */}
+        {typingUser && (
+          <div className="px-4 pb-1 flex items-center gap-1.5 text-xs text-[#b9bbbe]">
+            <span className="flex gap-0.5 items-end">
+              <span className="w-1 h-1 rounded-full bg-[#b9bbbe] animate-bounce" style={{ animationDelay: "0ms" }} />
+              <span className="w-1 h-1 rounded-full bg-[#b9bbbe] animate-bounce" style={{ animationDelay: "150ms" }} />
+              <span className="w-1 h-1 rounded-full bg-[#b9bbbe] animate-bounce" style={{ animationDelay: "300ms" }} />
+            </span>
+            <span><strong>{activeFriend.username}</strong> печатает...</span>
+          </div>
+        )}
+
         {/* Input */}
         <div className="mx-4 mb-4">
           {recording ? (
@@ -275,7 +294,14 @@ export default function DMChat({
                 className="flex-1 bg-transparent text-white placeholder-[#72767d] text-sm outline-none"
                 placeholder={`Сообщение для ${activeFriend.username}...`}
                 value={msgText}
-                onChange={e => onMsgTextChange(e.target.value)}
+                onChange={e => {
+                  onMsgTextChange(e.target.value);
+                  if (e.target.value) {
+                    sendTyping();
+                    if (typingTimerRef.current) clearTimeout(typingTimerRef.current);
+                    typingTimerRef.current = setTimeout(sendTyping, 2500);
+                  }
+                }}
                 onKeyDown={onKey}
               />
               {msgText.trim() ? (
