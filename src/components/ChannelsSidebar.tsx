@@ -61,8 +61,8 @@ const ChannelsSidebar = ({ mobileSidebarOpen, onClose, activeChannel, activeRoom
 
   const loadFriends = async () => {
     if (!token) return;
-    const BASE = "https://functions.poehali.dev/b1a16ec3-c9d7-4e46-bb90-e30137e5c534";
-    const res = await fetch(`${BASE}?action=friends&sub=list`, {
+   const BASE = "/api";
+    const res = await fetch(`${BASE}/action-friends&sub=list`, {
       headers: { "X-Authorization": `Bearer ${token}` },
     });
     const data = await res.json();
