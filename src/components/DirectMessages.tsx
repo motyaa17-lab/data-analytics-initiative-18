@@ -1,7 +1,8 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { User } from "@/hooks/useAuth";
 import DMChat from "@/components/dm/DMChat";
 import DMFriendsList from "@/components/dm/DMFriendsList";
+import CallModal, { CallInfo } from "@/components/dm/CallModal";
 import {
   Friend, FriendRequest, DMessage, DMContextMenu, Tab,
   apiFriends, apiSendFriendReq, apiRespondReq, apiGetDM, apiSendDM,
@@ -29,9 +30,11 @@ export default function DirectMessages({ user, token, onClose, seenKey = "frikor
   const [newMsgCount, setNewMsgCount] = useState(0);
   const [dmContextMenu, setDmContextMenu] = useState<DMContextMenu | null>(null);
   const [profileUsername, setProfileUsername] = useState<string | null>(null);
+  const [activeCall, setActiveCall] = useState<CallInfo | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const callPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const uid = (user as unknown as { id: number }).id;
 
@@ -68,10 +71,28 @@ export default function DirectMessages({ user, token, onClose, seenKey = "frikor
     if (data.requests) setRequests(data.requests);
   };
 
+  const checkIncomingCalls = useCallback(async () => {
+    if (activeCall) return;
+    const res = await fetch(`${BASE}?action=call_signal`, { headers: authHeaders(token) });
+    const data = await res.json();
+    const callSig = data.signals?.find((s: { type: string }) => s.type === "call");
+    if (callSig) {
+      const caller = friends.find((f: Friend) => f.id === callSig.from_user_id);
+      if (caller) {
+        setActiveCall({ friendId: caller.id, friendName: caller.username, state: "incoming" });
+      }
+    }
+  }, [activeCall, token, friends]);
+
   useEffect(() => {
     loadFriends();
     loadRequests();
   }, []);
+
+  useEffect(() => {
+    callPollRef.current = setInterval(checkIncomingCalls, 2000);
+    return () => { if (callPollRef.current) clearInterval(callPollRef.current); };
+  }, [checkIncomingCalls]);
 
   useEffect(() => {
     if (!activeFriend) return;
@@ -152,6 +173,11 @@ export default function DirectMessages({ user, token, onClose, seenKey = "frikor
     if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSend(); }
   };
 
+  const handleStartCall = () => {
+    if (!activeFriend) return;
+    setActiveCall({ friendId: activeFriend.id, friendName: activeFriend.username, state: "calling" });
+  };
+
   const handleVoiceSendDM = async (blob: Blob, ext: string) => {
     if (!activeFriend) return;
     const arrayBuf = await blob.arrayBuffer();
@@ -171,48 +197,71 @@ export default function DirectMessages({ user, token, onClose, seenKey = "frikor
 
   if (activeFriend) {
     return (
-      <DMChat
-        user={user}
-        token={token}
-        uid={uid}
-        activeFriend={activeFriend}
-        messages={messages}
-        msgText={msgText}
-        newMsgCount={newMsgCount}
-        dmContextMenu={dmContextMenu}
-        profileUsername={profileUsername}
-        scrollContainerRef={scrollContainerRef}
-        messagesEndRef={messagesEndRef}
-        onBack={() => setActiveFriend(null)}
-        onClose={onClose}
-        onMsgTextChange={setMsgText}
-        onSend={handleSend}
-        onKey={handleKey}
-        onScrollToBottom={scrollToBottom}
-        onSetContextMenu={setDmContextMenu}
-        onSetProfileUsername={setProfileUsername}
-        onDeleteDM={handleDeleteDM}
-        setMessages={setMessages}
-        onVoiceSend={handleVoiceSendDM}
-      />
+      <>
+        {activeCall && (
+          <CallModal
+            call={activeCall}
+            token={token}
+            userId={uid}
+            username={user.username}
+            onEnd={() => setActiveCall(null)}
+          />
+        )}
+        <DMChat
+          user={user}
+          token={token}
+          uid={uid}
+          activeFriend={activeFriend}
+          messages={messages}
+          msgText={msgText}
+          newMsgCount={newMsgCount}
+          dmContextMenu={dmContextMenu}
+          profileUsername={profileUsername}
+          scrollContainerRef={scrollContainerRef}
+          messagesEndRef={messagesEndRef}
+          onBack={() => setActiveFriend(null)}
+          onClose={onClose}
+          onMsgTextChange={setMsgText}
+          onSend={handleSend}
+          onKey={handleKey}
+          onScrollToBottom={scrollToBottom}
+          onSetContextMenu={setDmContextMenu}
+          onSetProfileUsername={setProfileUsername}
+          onDeleteDM={handleDeleteDM}
+          setMessages={setMessages}
+          onVoiceSend={handleVoiceSendDM}
+          onCall={handleStartCall}
+        />
+      </>
     );
   }
 
   return (
-    <DMFriendsList
-      tab={tab}
-      friends={friends}
-      requests={requests}
-      unreadPerFriend={unreadPerFriend}
-      addUsername={addUsername}
-      addStatus={addStatus}
-      loading={loading}
-      onClose={onClose}
-      onSetTab={t => { setTab(t); setAddStatus(null); }}
-      onOpenFriend={f => { setActiveFriend(f); setUnreadPerFriend(prev => ({ ...prev, [f.id]: 0 })); }}
-      onRespond={handleRespond}
-      onAddUsernameChange={setAddUsername}
-      onAdd={handleAdd}
-    />
+    <>
+      {activeCall && (
+        <CallModal
+          call={activeCall}
+          token={token}
+          userId={uid}
+          username={user.username}
+          onEnd={() => setActiveCall(null)}
+        />
+      )}
+      <DMFriendsList
+        tab={tab}
+        friends={friends}
+        requests={requests}
+        unreadPerFriend={unreadPerFriend}
+        addUsername={addUsername}
+        addStatus={addStatus}
+        loading={loading}
+        onClose={onClose}
+        onSetTab={t => { setTab(t); setAddStatus(null); }}
+        onOpenFriend={f => { setActiveFriend(f); setUnreadPerFriend(prev => ({ ...prev, [f.id]: 0 })); }}
+        onRespond={handleRespond}
+        onAddUsernameChange={setAddUsername}
+        onAdd={handleAdd}
+      />
+    </>
   );
 }

@@ -28,13 +28,14 @@ interface Props {
   onDeleteDM: (msgId: number) => void;
   setMessages: React.Dispatch<React.SetStateAction<DMessage[]>>;
   onVoiceSend: (blob: Blob, ext: string) => void;
+  onCall: () => void;
 }
 
 export default function DMChat({
   user, token, uid, activeFriend, messages, msgText, newMsgCount,
   dmContextMenu, profileUsername, scrollContainerRef, messagesEndRef,
   onBack, onClose, onMsgTextChange, onSend, onKey, onScrollToBottom,
-  onSetContextMenu, onSetProfileUsername, onDeleteDM, setMessages, onVoiceSend,
+  onSetContextMenu, onSetProfileUsername, onDeleteDM, setMessages, onVoiceSend, onCall,
 }: Props) {
   const [editingMsg, setEditingMsg] = useState<{ id: number; content: string } | null>(null);
   const [editText, setEditText] = useState("");
@@ -156,9 +157,18 @@ export default function DMChat({
               <div className="text-xs text-[#b9bbbe] truncate">{activeFriend.favorite_game}</div>
             )}
           </div>
-          <button className="ml-auto text-[#b9bbbe] hover:text-white transition-colors" onClick={onClose}>
-            <Icon name="X" size={18} />
-          </button>
+          <div className="ml-auto flex items-center gap-1">
+            <button
+              className="text-[#b9bbbe] hover:text-[#3ba55c] transition-colors p-1.5 rounded-md hover:bg-white/5"
+              onClick={onCall}
+              title="Позвонить"
+            >
+              <Icon name="Phone" size={17} />
+            </button>
+            <button className="text-[#b9bbbe] hover:text-white transition-colors p-1" onClick={onClose}>
+              <Icon name="X" size={18} />
+            </button>
+          </div>
         </div>
 
         {/* Messages */}

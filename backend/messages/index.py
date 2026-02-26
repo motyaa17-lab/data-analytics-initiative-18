@@ -766,4 +766,32 @@ def handler(event: dict, context) -> dict:
         cur.execute(f"UPDATE {schema}.direct_messages SET is_removed=TRUE WHERE id={msg_id}")
         return resp(200, {'ok': True})
 
+    # ─── CALL SIGNALING ──────────────────────────────────────
+
+    if action == 'call_signal':
+        user = get_user(cur, schema, token)
+        if not user: return err(401, 'Необходима авторизация')
+        uid = user[0]
+
+        if method == 'POST':
+            to_id = int(body.get('to', 0))
+            sig_type = body.get('type', '')
+            payload = body.get('payload') or ''
+            if not to_id or sig_type not in ('offer', 'answer', 'ice', 'call', 'reject', 'hangup', 'busy'):
+                return err(400, 'Неверные параметры')
+            cur.execute(f"SELECT 1 FROM {schema}.friend_requests WHERE ((from_user_id={uid} AND to_user_id={to_id}) OR (from_user_id={to_id} AND to_user_id={uid})) AND status='accepted'")
+            if not cur.fetchone(): return err(403, 'Не друзья')
+            payload_safe = str(payload).replace("'", "''")[:8000]
+            cur.execute(f"INSERT INTO {schema}.call_signals(from_user_id,to_user_id,type,payload) VALUES({uid},{to_id},'{sig_type}','{payload_safe}')")
+            return resp(200, {'ok': True})
+
+        if method == 'GET':
+            cur.execute(f"SELECT id,from_user_id,type,payload,created_at FROM {schema}.call_signals WHERE to_user_id={uid} AND created_at > now()-interval '30 seconds' ORDER BY id ASC LIMIT 20")
+            rows = cur.fetchall()
+            signals = [{'id':r[0],'from_user_id':r[1],'type':r[2],'payload':r[3],'created_at':str(r[4])} for r in rows]
+            if rows:
+                cur.execute(f"DELETE FROM {schema}.call_signals WHERE to_user_id={uid} AND id <= {rows[-1][0]}")
+            cur.execute(f"DELETE FROM {schema}.call_signals WHERE created_at < now()-interval '60 seconds'")
+            return resp(200, {'signals': signals})
+
     return err(404, 'Not found')
