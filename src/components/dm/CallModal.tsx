@@ -37,6 +37,7 @@ export default function CallModal({ call, token, userId, username, onEnd }: Prop
   const analyserRef = useRef<AnalyserNode | null>(null);
   const audioCtxRef = useRef<AudioContext | null>(null);
   const animRef = useRef<number | null>(null);
+  const connectTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const endedRef = useRef(false);
 
   const savedMicId = localStorage.getItem("frikords_mic_id") || undefined;
@@ -54,6 +55,7 @@ export default function CallModal({ call, token, userId, username, onEnd }: Prop
     endedRef.current = true;
     if (pollRef.current) clearInterval(pollRef.current);
     if (durationRef.current) clearInterval(durationRef.current);
+    if (connectTimeoutRef.current) clearTimeout(connectTimeoutRef.current);
     if (animRef.current) cancelAnimationFrame(animRef.current);
     if (audioCtxRef.current) audioCtxRef.current.close();
     if (localStreamRef.current) localStreamRef.current.getTracks().forEach(t => t.stop());
@@ -84,9 +86,9 @@ export default function CallModal({ call, token, userId, username, onEnd }: Prop
     const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
     pcRef.current = pc;
 
-    const stream = await navigator.mediaDevices.getUserMedia({
-      audio: savedMicId ? { deviceId: { exact: savedMicId } } : true,
-    });
+    const audioConstraints: MediaTrackConstraints | boolean =
+      savedMicId ? { deviceId: { ideal: savedMicId } } : true;
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: audioConstraints });
     localStreamRef.current = stream;
     stream.getTracks().forEach(t => pc.addTrack(t, stream));
     startMicMeter(stream);
@@ -107,6 +109,7 @@ export default function CallModal({ call, token, userId, username, onEnd }: Prop
 
     pc.onconnectionstatechange = () => {
       if (pc.connectionState === "connected") {
+        if (connectTimeoutRef.current) clearTimeout(connectTimeoutRef.current);
         setState("active");
         durationRef.current = setInterval(() => setDuration(d => d + 1), 1000);
       } else if (["disconnected", "failed", "closed"].includes(pc.connectionState)) {
@@ -125,7 +128,13 @@ export default function CallModal({ call, token, userId, username, onEnd }: Prop
     const offer = await pc.createOffer({ offerToReceiveAudio: true });
     await pc.setLocalDescription(offer);
     await sendSignal("offer", JSON.stringify(offer));
-  }, [sendSignal, createPC]);
+
+    connectTimeoutRef.current = setTimeout(() => {
+      if (!endedRef.current && pcRef.current?.connectionState !== "connected") {
+        cleanup();
+      }
+    }, 30000);
+  }, [sendSignal, createPC, cleanup]);
 
   const answerCall = useCallback(async (offerSdp: string) => {
     const pc = await createPC();
@@ -136,7 +145,13 @@ export default function CallModal({ call, token, userId, username, onEnd }: Prop
     await sendSignal("answer", JSON.stringify(answer));
     setState("active");
     durationRef.current = setInterval(() => setDuration(d => d + 1), 1000);
-  }, [createPC, sendSignal]);
+
+    connectTimeoutRef.current = setTimeout(() => {
+      if (!endedRef.current && pcRef.current?.connectionState !== "connected") {
+        cleanup();
+      }
+    }, 30000);
+  }, [createPC, sendSignal, cleanup]);
 
   const handleSignals = useCallback(async (signals: { id: number; from_user_id: number; type: string; payload: string }[]) => {
     for (const sig of signals) {
