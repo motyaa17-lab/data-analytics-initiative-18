@@ -13,7 +13,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { User } from "@/hooks/useAuth";
 import Icon from "@/components/ui/icon";
 
-const BASE = "https://functions.poehali.dev/b1a16ec3-c9d7-4e46-bb90-e30137e5c534";
+const BASE = "/api";
 const SEEN_KEY = "frikords_dm_seen";
 
 function getSeenMap(): Record<string, number> {
