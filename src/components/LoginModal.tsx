@@ -3,7 +3,7 @@ import { X, Eye, EyeOff } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { User } from "@/hooks/useAuth";
 
-const LOGIN_URL = "https://functions.poehali.dev/acceb9f5-c79d-4d70-b444-0f5e41563106";
+const LOGIN_URL = "/api/login";
 
 interface LoginModalProps {
   onClose: () => void;
