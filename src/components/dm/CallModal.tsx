@@ -22,26 +22,10 @@ const ICE_SERVERS = [
   { urls: "stun:stun.l.google.com:19302" },
   { urls: "stun:stun1.l.google.com:19302" },
   { urls: "stun:stun.relay.metered.ca:80" },
-  {
-    urls: "turn:global.relay.metered.ca:80",
-    username: "openrelayproject",
-    credential: "openrelayproject",
-  },
-  {
-    urls: "turn:global.relay.metered.ca:80?transport=tcp",
-    username: "openrelayproject",
-    credential: "openrelayproject",
-  },
-  {
-    urls: "turn:global.relay.metered.ca:443",
-    username: "openrelayproject",
-    credential: "openrelayproject",
-  },
-  {
-    urls: "turns:global.relay.metered.ca:443?transport=tcp",
-    username: "openrelayproject",
-    credential: "openrelayproject",
-  },
+  { urls: "turn:global.relay.metered.ca:80", username: "openrelayproject", credential: "openrelayproject" },
+  { urls: "turn:global.relay.metered.ca:80?transport=tcp", username: "openrelayproject", credential: "openrelayproject" },
+  { urls: "turn:global.relay.metered.ca:443", username: "openrelayproject", credential: "openrelayproject" },
+  { urls: "turns:global.relay.metered.ca:443?transport=tcp", username: "openrelayproject", credential: "openrelayproject" },
 ];
 
 export default function CallModal({ call, token, userId, username, onEnd }: Props) {
@@ -50,6 +34,7 @@ export default function CallModal({ call, token, userId, username, onEnd }: Prop
   const [duration, setDuration] = useState(0);
   const [micLevel, setMicLevel] = useState(0);
 
+  // Все WebRTC refs — никаких stale closures
   const pcRef = useRef<RTCPeerConnection | null>(null);
   const localStreamRef = useRef<MediaStream | null>(null);
   const remoteAudioRef = useRef<HTMLAudioElement | null>(null);
@@ -60,15 +45,25 @@ export default function CallModal({ call, token, userId, username, onEnd }: Prop
   const animRef = useRef<number | null>(null);
   const connectTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const endedRef = useRef(false);
+  const iceCandidateQueueRef = useRef<RTCIceCandidate[]>([]);
+  const hasRemoteDescRef = useRef(false);
+  const stateRef = useRef<CallState>(call.state);
 
   const savedMicId = localStorage.getItem("frikords_mic_id") || undefined;
 
+  const setStateSync = (s: CallState) => {
+    stateRef.current = s;
+    setState(s);
+  };
+
   const sendSignal = useCallback(async (type: string, payload: string = "") => {
-    await fetch(`${BASE}?action=call_signal`, {
-      method: "POST",
-      headers: authHeaders(token),
-      body: JSON.stringify({ to: call.friendId, type, payload }),
-    });
+    try {
+      await fetch(`${BASE}?action=call_signal`, {
+        method: "POST",
+        headers: authHeaders(token),
+        body: JSON.stringify({ to: call.friendId, type, payload }),
+      });
+    } catch { /* ignore */ }
   }, [token, call.friendId]);
 
   const cleanup = useCallback(() => {
@@ -78,34 +73,43 @@ export default function CallModal({ call, token, userId, username, onEnd }: Prop
     if (durationRef.current) clearInterval(durationRef.current);
     if (connectTimeoutRef.current) clearTimeout(connectTimeoutRef.current);
     if (animRef.current) cancelAnimationFrame(animRef.current);
-    if (audioCtxRef.current) audioCtxRef.current.close();
+    if (audioCtxRef.current) audioCtxRef.current.close().catch(() => {});
     if (localStreamRef.current) localStreamRef.current.getTracks().forEach(t => t.stop());
     if (pcRef.current) { pcRef.current.close(); pcRef.current = null; }
-    setState("ended");
+    setStateSync("ended");
     setTimeout(onEnd, 1500);
   }, [onEnd]);
 
-  const startMicMeter = useCallback((stream: MediaStream) => {
+  const startMicMeter = (stream: MediaStream) => {
     const ctx = new AudioContext();
     audioCtxRef.current = ctx;
     const analyser = ctx.createAnalyser();
     analyser.fftSize = 256;
     analyserRef.current = analyser;
-    const src = ctx.createMediaStreamSource(stream);
-    src.connect(analyser);
+    ctx.createMediaStreamSource(stream).connect(analyser);
     const tick = () => {
       const buf = new Uint8Array(analyser.frequencyBinCount);
       analyser.getByteFrequencyData(buf);
-      const avg = buf.reduce((a, b) => a + b, 0) / buf.length;
-      setMicLevel(Math.min(100, (avg / 128) * 100 * 3));
+      setMicLevel(Math.min(100, (buf.reduce((a, b) => a + b, 0) / buf.length / 128) * 300));
       animRef.current = requestAnimationFrame(tick);
     };
     tick();
-  }, []);
+  };
+
+  // Применяем накопленные ICE кандидаты после setRemoteDescription
+  const flushIceQueue = async (pc: RTCPeerConnection) => {
+    const q = iceCandidateQueueRef.current;
+    iceCandidateQueueRef.current = [];
+    for (const c of q) {
+      try { await pc.addIceCandidate(c); } catch { /* ignore */ }
+    }
+  };
 
   const createPC = useCallback(async (): Promise<RTCPeerConnection> => {
     const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
     pcRef.current = pc;
+    hasRemoteDescRef.current = false;
+    iceCandidateQueueRef.current = [];
 
     const audioConstraints: MediaTrackConstraints | boolean =
       savedMicId ? { deviceId: { ideal: savedMicId } } : true;
@@ -120,6 +124,7 @@ export default function CallModal({ call, token, userId, username, onEnd }: Prop
 
     pc.ontrack = (e) => {
       audio.srcObject = e.streams[0];
+      audio.play().catch(() => {});
     };
 
     pc.onicecandidate = (e) => {
@@ -128,102 +133,109 @@ export default function CallModal({ call, token, userId, username, onEnd }: Prop
       }
     };
 
-    pc.onconnectionstatechange = () => {
-      console.log("[WebRTC] connectionState:", pc.connectionState);
-      if (pc.connectionState === "connected") {
-        if (connectTimeoutRef.current) clearTimeout(connectTimeoutRef.current);
-        setState("active");
-        if (!durationRef.current) durationRef.current = setInterval(() => setDuration(d => d + 1), 1000);
-      } else if (["disconnected", "failed", "closed"].includes(pc.connectionState)) {
-        if (!endedRef.current) cleanup();
-      }
-    };
-
     pc.oniceconnectionstatechange = () => {
-      console.log("[WebRTC] iceConnectionState:", pc.iceConnectionState);
+      console.log("[WebRTC] iceState:", pc.iceConnectionState);
       if (pc.iceConnectionState === "connected" || pc.iceConnectionState === "completed") {
         if (connectTimeoutRef.current) clearTimeout(connectTimeoutRef.current);
-        setState("active");
+        setStateSync("active");
         if (!durationRef.current) durationRef.current = setInterval(() => setDuration(d => d + 1), 1000);
       } else if (pc.iceConnectionState === "failed") {
+        console.log("[WebRTC] ICE failed, restarting...");
         pc.restartIce();
       } else if (pc.iceConnectionState === "disconnected") {
         setTimeout(() => {
-          if (pc.iceConnectionState === "disconnected" && !endedRef.current) cleanup();
+          if (!endedRef.current && pc.iceConnectionState === "disconnected") cleanup();
         }, 5000);
       }
     };
 
+    pc.onconnectionstatechange = () => {
+      console.log("[WebRTC] connState:", pc.connectionState);
+      if (pc.connectionState === "connected") {
+        if (connectTimeoutRef.current) clearTimeout(connectTimeoutRef.current);
+        setStateSync("active");
+        if (!durationRef.current) durationRef.current = setInterval(() => setDuration(d => d + 1), 1000);
+      } else if (pc.connectionState === "failed" || pc.connectionState === "closed") {
+        if (!endedRef.current) cleanup();
+      }
+    };
+
     return pc;
-  }, [savedMicId, sendSignal, startMicMeter, cleanup]);
+  }, [savedMicId, sendSignal, cleanup]);
 
   const startCall = useCallback(async () => {
-    setState("calling");
+    setStateSync("calling");
     await sendSignal("call");
     const pc = await createPC();
-
     const offer = await pc.createOffer({ offerToReceiveAudio: true });
     await pc.setLocalDescription(offer);
     await sendSignal("offer", JSON.stringify(offer));
 
     connectTimeoutRef.current = setTimeout(() => {
-      if (!endedRef.current && pcRef.current?.connectionState !== "connected") {
-        cleanup();
-      }
-    }, 30000);
+      if (!endedRef.current) cleanup();
+    }, 45000);
   }, [sendSignal, createPC, cleanup]);
 
   const answerCall = useCallback(async (offerSdp: string) => {
-    const pc = await createPC();
+    const pc = pcRef.current || await createPC();
+    if (pc.signalingState !== "stable") return;
+
     const offer = JSON.parse(offerSdp);
     await pc.setRemoteDescription(new RTCSessionDescription(offer));
+    hasRemoteDescRef.current = true;
+    await flushIceQueue(pc);
+
     const answer = await pc.createAnswer();
     await pc.setLocalDescription(answer);
     await sendSignal("answer", JSON.stringify(answer));
 
     connectTimeoutRef.current = setTimeout(() => {
-      if (!endedRef.current && pc.iceConnectionState !== "connected" && pc.iceConnectionState !== "completed") {
-        cleanup();
-      }
-    }, 30000);
+      if (!endedRef.current) cleanup();
+    }, 45000);
   }, [createPC, sendSignal, cleanup]);
 
-  const handleSignals = useCallback(async (signals: { id: number; from_user_id: number; type: string; payload: string }[]) => {
-    for (const sig of signals) {
-      if (sig.from_user_id !== call.friendId) continue;
-      const pc = pcRef.current;
-
-      if (sig.type === "answer" && pc) {
-        const answer = JSON.parse(sig.payload);
-        if (pc.signalingState === "have-local-offer") {
-          await pc.setRemoteDescription(new RTCSessionDescription(answer));
-        }
-      } else if (sig.type === "ice" && pc && pc.remoteDescription) {
-        const candidate = JSON.parse(sig.payload);
-        await pc.addIceCandidate(new RTCIceCandidate(candidate));
-      } else if (sig.type === "hangup" || sig.type === "reject" || sig.type === "busy") {
-        cleanup();
-      } else if (sig.type === "offer" && (state === "incoming" || (state as string) === "connecting") && !pc) {
-        await answerCall(sig.payload);
-      }
-    }
-  }, [call.friendId, state, cleanup, answerCall]);
-
+  // Polling сигналов — используем ref для состояния чтобы не было stale closure
   const pollSignals = useCallback(async () => {
-    const res = await fetch(`${BASE}?action=call_signal`, { headers: authHeaders(token) });
-    const data = await res.json();
-    if (data.signals?.length) await handleSignals(data.signals);
-  }, [token, handleSignals]);
+    if (endedRef.current) return;
+    try {
+      const res = await fetch(`${BASE}?action=call_signal`, { headers: authHeaders(token) });
+      const data = await res.json();
+      if (!data.signals?.length) return;
+
+      for (const sig of data.signals) {
+        if (sig.from_user_id !== call.friendId) continue;
+        const pc = pcRef.current;
+        const curState = stateRef.current;
+
+        if (sig.type === "answer" && pc && pc.signalingState === "have-local-offer") {
+          await pc.setRemoteDescription(new RTCSessionDescription(JSON.parse(sig.payload)));
+          hasRemoteDescRef.current = true;
+          await flushIceQueue(pc);
+
+        } else if (sig.type === "ice") {
+          const candidate = new RTCIceCandidate(JSON.parse(sig.payload));
+          if (pc && hasRemoteDescRef.current) {
+            try { await pc.addIceCandidate(candidate); } catch { /* ignore */ }
+          } else {
+            // Буферизируем — remoteDescription ещё не установлено
+            iceCandidateQueueRef.current.push(candidate);
+          }
+
+        } else if (sig.type === "hangup" || sig.type === "reject" || sig.type === "busy") {
+          cleanup();
+
+        } else if (sig.type === "offer" && (curState === "incoming" || curState === "calling" || (curState as string) === "connecting")) {
+          await answerCall(sig.payload);
+        }
+      }
+    } catch { /* ignore network errors */ }
+  }, [token, call.friendId, cleanup, answerCall]);
 
   useEffect(() => {
     endedRef.current = false;
-    if (call.state === "calling") {
-      startCall();
-    }
-    pollRef.current = setInterval(pollSignals, 1000);
-    return () => {
-      if (pollRef.current) clearInterval(pollRef.current);
-    };
+    if (call.state === "calling") startCall();
+    pollRef.current = setInterval(pollSignals, 800);
+    return () => { if (pollRef.current) clearInterval(pollRef.current); };
   }, []);
 
   const handleHangup = async () => {
@@ -232,16 +244,9 @@ export default function CallModal({ call, token, userId, username, onEnd }: Prop
   };
 
   const handleAccept = async () => {
-    setState("connecting" as CallState);
-    const res = await fetch(`${BASE}?action=call_signal`, { headers: authHeaders(token) });
-    const data = await res.json();
-    const offerSig = data.signals?.find((s: { from_user_id: number; type: string; payload: string }) => s.from_user_id === call.friendId && s.type === "offer");
-    if (offerSig) {
-      await answerCall(offerSig.payload);
-    } else {
-      await createPC();
-      // offer придёт через основной pollSignals цикл в handleSignals → answerCall
-    }
+    setStateSync("connecting" as CallState);
+    // Сразу забираем сигналы — offer мог уже прийти
+    await pollSignals();
   };
 
   const handleReject = async () => {
@@ -267,7 +272,7 @@ export default function CallModal({ call, token, userId, username, onEnd }: Prop
 
         {/* Avatar with pulse ring */}
         <div className="relative">
-          {(state === "calling" || state === "incoming") && (
+          {(state === "calling" || state === "incoming" || (state as string) === "connecting") && (
             <>
               <div className="absolute inset-0 rounded-full animate-ping opacity-20" style={{ background: bg, animationDuration: "1.5s" }} />
               <div className="absolute inset-0 rounded-full animate-ping opacity-10" style={{ background: bg, animationDuration: "2s", animationDelay: "0.5s" }} />
@@ -276,11 +281,7 @@ export default function CallModal({ call, token, userId, username, onEnd }: Prop
           {state === "active" && (
             <div
               className="absolute inset-0 rounded-full transition-all duration-100"
-              style={{
-                background: bg,
-                opacity: 0.2,
-                transform: `scale(${1 + micLevel / 250})`,
-              }}
+              style={{ background: bg, opacity: 0.2, transform: `scale(${1 + micLevel / 250})` }}
             />
           )}
           <div
@@ -308,7 +309,7 @@ export default function CallModal({ call, token, userId, username, onEnd }: Prop
           </div>
         </div>
 
-        {/* Mic level bar (active only) */}
+        {/* Mic level bar */}
         {state === "active" && (
           <div className="w-full flex flex-col gap-1.5">
             <div className="h-1.5 bg-[#40444b] rounded-full overflow-hidden">
@@ -332,29 +333,17 @@ export default function CallModal({ call, token, userId, username, onEnd }: Prop
         {/* Actions */}
         {state === "incoming" && (
           <div className="flex gap-6 mt-2">
-            <button
-              onClick={handleReject}
-              className="w-14 h-14 rounded-full bg-[#ed4245] hover:bg-[#c03537] flex items-center justify-center transition-colors shadow-lg"
-              title="Отклонить"
-            >
+            <button onClick={handleReject} className="w-14 h-14 rounded-full bg-[#ed4245] hover:bg-[#c03537] flex items-center justify-center transition-colors shadow-lg" title="Отклонить">
               <Icon name="PhoneOff" size={22} className="text-white" />
             </button>
-            <button
-              onClick={handleAccept}
-              className="w-14 h-14 rounded-full bg-[#3ba55c] hover:bg-[#2d8c4e] flex items-center justify-center transition-colors shadow-lg"
-              title="Принять"
-            >
+            <button onClick={handleAccept} className="w-14 h-14 rounded-full bg-[#3ba55c] hover:bg-[#2d8c4e] flex items-center justify-center transition-colors shadow-lg" title="Принять">
               <Icon name="Phone" size={22} className="text-white" />
             </button>
           </div>
         )}
 
         {(state === "calling" || (state as string) === "connecting") && (
-          <button
-            onClick={handleHangup}
-            className="w-14 h-14 rounded-full bg-[#ed4245] hover:bg-[#c03537] flex items-center justify-center transition-colors shadow-lg mt-2"
-            title="Отменить"
-          >
+          <button onClick={handleHangup} className="w-14 h-14 rounded-full bg-[#ed4245] hover:bg-[#c03537] flex items-center justify-center transition-colors shadow-lg mt-2" title="Отменить">
             <Icon name="PhoneOff" size={22} className="text-white" />
           </button>
         )}
@@ -363,18 +352,12 @@ export default function CallModal({ call, token, userId, username, onEnd }: Prop
           <div className="flex gap-4 mt-2">
             <button
               onClick={toggleMute}
-              className={`w-12 h-12 rounded-full flex items-center justify-center transition-colors shadow ${
-                muted ? "bg-[#ed4245] hover:bg-[#c03537]" : "bg-[#40444b] hover:bg-[#52565e]"
-              }`}
+              className={`w-12 h-12 rounded-full flex items-center justify-center transition-colors shadow ${muted ? "bg-[#ed4245] hover:bg-[#c03537]" : "bg-[#40444b] hover:bg-[#52565e]"}`}
               title={muted ? "Включить микрофон" : "Выключить микрофон"}
             >
               <Icon name={muted ? "MicOff" : "Mic"} size={20} className="text-white" />
             </button>
-            <button
-              onClick={handleHangup}
-              className="w-14 h-14 rounded-full bg-[#ed4245] hover:bg-[#c03537] flex items-center justify-center transition-colors shadow-lg"
-              title="Завершить"
-            >
+            <button onClick={handleHangup} className="w-14 h-14 rounded-full bg-[#ed4245] hover:bg-[#c03537] flex items-center justify-center transition-colors shadow-lg" title="Завершить">
               <Icon name="PhoneOff" size={22} className="text-white" />
             </button>
           </div>
