@@ -38,16 +38,23 @@ export default function SettingsModal({ user, token, onClose, onUpdate }: Props)
   const animRef = useRef<number | null>(null);
 
   useEffect(() => {
-    if (activeTab === "audio") loadDevices();
+    if (activeTab === "audio") loadDevices(false);
     return () => stopMicTest();
   }, [activeTab]);
 
-  const loadDevices = async () => {
+  const loadDevices = async (withPermission = false) => {
     try {
-      await navigator.mediaDevices.getUserMedia({ audio: true }).then(s => s.getTracks().forEach(t => t.stop()));
+      if (withPermission) {
+        const s = await navigator.mediaDevices.getUserMedia({ audio: true });
+        s.getTracks().forEach(t => t.stop());
+      }
       const devices = await navigator.mediaDevices.enumerateDevices();
       const mics = devices.filter(d => d.kind === "audioinput");
+      if (mics.length === 0 && !withPermission) {
+        return;
+      }
       setMicDevices(mics);
+      setMicError(null);
       const saved = localStorage.getItem("frikords_mic_id");
       if (saved && mics.find(m => m.deviceId === saved)) {
         setSelectedMic(saved);
@@ -55,7 +62,7 @@ export default function SettingsModal({ user, token, onClose, onUpdate }: Props)
         setSelectedMic(mics[0].deviceId);
       }
     } catch {
-      setMicError("Нет доступа к микрофону");
+      setMicError("Браузер запретил доступ к микрофону. Разреши его в настройках браузера.");
     }
   };
 
@@ -65,6 +72,7 @@ export default function SettingsModal({ user, token, onClose, onUpdate }: Props)
       const stream = await navigator.mediaDevices.getUserMedia({
         audio: selectedMic ? { deviceId: { exact: selectedMic } } : true,
       });
+      await loadDevices();
       streamRef.current = stream;
       const ctx = new AudioContext();
       audioCtxRef.current = ctx;
@@ -319,15 +327,14 @@ export default function SettingsModal({ user, token, onClose, onUpdate }: Props)
 
               <button
                 onClick={micTesting ? stopMicTest : startMicTest}
-                disabled={!selectedMic && micDevices.length === 0}
                 className={`w-full font-medium py-2 rounded-lg text-sm transition-colors flex items-center justify-center gap-2 ${
                   micTesting
                     ? "bg-[#ed4245] hover:bg-[#c03537] text-white"
-                    : "bg-[#3ba55c] hover:bg-[#2d8c4e] text-white disabled:opacity-40"
+                    : "bg-[#3ba55c] hover:bg-[#2d8c4e] text-white"
                 }`}
               >
                 <Icon name={micTesting ? "MicOff" : "Mic"} size={16} />
-                {micTesting ? "Остановить проверку" : "Проверить микрофон"}
+                {micTesting ? "Остановить проверку" : micDevices.length === 0 ? "Разрешить доступ и проверить" : "Проверить микрофон"}
               </button>
 
               <p className="text-[#72767d] text-xs text-center">
