@@ -69,9 +69,11 @@ export default function SettingsModal({ user, token, onClose, onUpdate }: Props)
   const startMicTest = async () => {
     setMicError(null);
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        audio: selectedMic ? { deviceId: { exact: selectedMic } } : true,
-      });
+      const audioConstraints: MediaTrackConstraints | boolean =
+        selectedMic && selectedMic !== "default"
+          ? { deviceId: { ideal: selectedMic } }
+          : true;
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: audioConstraints });
       await loadDevices();
       streamRef.current = stream;
       const ctx = new AudioContext();
@@ -90,8 +92,15 @@ export default function SettingsModal({ user, token, onClose, onUpdate }: Props)
         animRef.current = requestAnimationFrame(tick);
       };
       tick();
-    } catch {
-      setMicError("Не удалось подключиться к микрофону");
+    } catch (e: unknown) {
+      const name = e instanceof Error ? e.name : "";
+      if (name === "NotAllowedError" || name === "PermissionDeniedError") {
+        setMicError("Доступ к микрофону запрещён. Разреши его в настройках браузера (🔒 в адресной строке).");
+      } else if (name === "NotFoundError" || name === "DevicesNotFoundError") {
+        setMicError("Микрофон не найден. Проверь, подключён ли он.");
+      } else {
+        setMicError("Не удалось подключиться к микрофону. Проверь, не используется ли он другим приложением.");
+      }
     }
   };
 
