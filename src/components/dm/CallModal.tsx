@@ -217,8 +217,9 @@ export default function CallModal({ call, token, userId, username, onEnd }: Prop
 
   const toggleMute = () => {
     if (localStreamRef.current) {
-      localStreamRef.current.getAudioTracks().forEach(t => { t.enabled = muted; });
-      setMuted(m => !m);
+      const next = !muted;
+      localStreamRef.current.getAudioTracks().forEach(t => { t.enabled = !next; });
+      setMuted(next);
     }
   };
 
@@ -275,14 +276,22 @@ export default function CallModal({ call, token, userId, username, onEnd }: Prop
 
         {/* Mic level bar (active only) */}
         {state === "active" && (
-          <div className="w-full h-1.5 bg-[#40444b] rounded-full overflow-hidden">
-            <div
-              className="h-full rounded-full transition-all duration-75"
-              style={{
-                width: `${micLevel}%`,
-                background: micLevel > 70 ? "#ed4245" : micLevel > 40 ? "#faa81a" : "#3ba55c",
-              }}
-            />
+          <div className="w-full flex flex-col gap-1.5">
+            <div className="h-1.5 bg-[#40444b] rounded-full overflow-hidden">
+              <div
+                className="h-full rounded-full transition-all duration-75"
+                style={{
+                  width: muted ? "0%" : `${micLevel}%`,
+                  background: micLevel > 70 ? "#ed4245" : micLevel > 40 ? "#faa81a" : "#3ba55c",
+                }}
+              />
+            </div>
+            {muted && (
+              <div className="flex items-center justify-center gap-1.5">
+                <Icon name="MicOff" size={12} className="text-[#ed4245]" />
+                <span className="text-[#ed4245] text-xs font-medium">Микрофон выключен</span>
+              </div>
+            )}
           </div>
         )}
 
