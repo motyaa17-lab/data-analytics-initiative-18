@@ -21,6 +21,27 @@ interface Props {
 const ICE_SERVERS = [
   { urls: "stun:stun.l.google.com:19302" },
   { urls: "stun:stun1.l.google.com:19302" },
+  { urls: "stun:stun.relay.metered.ca:80" },
+  {
+    urls: "turn:global.relay.metered.ca:80",
+    username: "openrelayproject",
+    credential: "openrelayproject",
+  },
+  {
+    urls: "turn:global.relay.metered.ca:80?transport=tcp",
+    username: "openrelayproject",
+    credential: "openrelayproject",
+  },
+  {
+    urls: "turn:global.relay.metered.ca:443",
+    username: "openrelayproject",
+    credential: "openrelayproject",
+  },
+  {
+    urls: "turns:global.relay.metered.ca:443?transport=tcp",
+    username: "openrelayproject",
+    credential: "openrelayproject",
+  },
 ];
 
 export default function CallModal({ call, token, userId, username, onEnd }: Props) {
@@ -108,12 +129,28 @@ export default function CallModal({ call, token, userId, username, onEnd }: Prop
     };
 
     pc.onconnectionstatechange = () => {
+      console.log("[WebRTC] connectionState:", pc.connectionState);
       if (pc.connectionState === "connected") {
         if (connectTimeoutRef.current) clearTimeout(connectTimeoutRef.current);
         setState("active");
-        durationRef.current = setInterval(() => setDuration(d => d + 1), 1000);
+        if (!durationRef.current) durationRef.current = setInterval(() => setDuration(d => d + 1), 1000);
       } else if (["disconnected", "failed", "closed"].includes(pc.connectionState)) {
         if (!endedRef.current) cleanup();
+      }
+    };
+
+    pc.oniceconnectionstatechange = () => {
+      console.log("[WebRTC] iceConnectionState:", pc.iceConnectionState);
+      if (pc.iceConnectionState === "connected" || pc.iceConnectionState === "completed") {
+        if (connectTimeoutRef.current) clearTimeout(connectTimeoutRef.current);
+        setState("active");
+        if (!durationRef.current) durationRef.current = setInterval(() => setDuration(d => d + 1), 1000);
+      } else if (pc.iceConnectionState === "failed") {
+        pc.restartIce();
+      } else if (pc.iceConnectionState === "disconnected") {
+        setTimeout(() => {
+          if (pc.iceConnectionState === "disconnected" && !endedRef.current) cleanup();
+        }, 5000);
       }
     };
 
@@ -143,11 +180,9 @@ export default function CallModal({ call, token, userId, username, onEnd }: Prop
     const answer = await pc.createAnswer();
     await pc.setLocalDescription(answer);
     await sendSignal("answer", JSON.stringify(answer));
-    setState("active");
-    durationRef.current = setInterval(() => setDuration(d => d + 1), 1000);
 
     connectTimeoutRef.current = setTimeout(() => {
-      if (!endedRef.current && pcRef.current?.connectionState !== "connected") {
+      if (!endedRef.current && pc.iceConnectionState !== "connected" && pc.iceConnectionState !== "completed") {
         cleanup();
       }
     }, 30000);
@@ -162,15 +197,13 @@ export default function CallModal({ call, token, userId, username, onEnd }: Prop
         const answer = JSON.parse(sig.payload);
         if (pc.signalingState === "have-local-offer") {
           await pc.setRemoteDescription(new RTCSessionDescription(answer));
-          setState("active");
-          durationRef.current = setInterval(() => setDuration(d => d + 1), 1000);
         }
       } else if (sig.type === "ice" && pc && pc.remoteDescription) {
         const candidate = JSON.parse(sig.payload);
         await pc.addIceCandidate(new RTCIceCandidate(candidate));
       } else if (sig.type === "hangup" || sig.type === "reject" || sig.type === "busy") {
         cleanup();
-      } else if (sig.type === "offer" && state === "incoming") {
+      } else if (sig.type === "offer" && (state === "incoming" || (state as string) === "connecting") && !pc) {
         await answerCall(sig.payload);
       }
     }
@@ -206,22 +239,8 @@ export default function CallModal({ call, token, userId, username, onEnd }: Prop
     if (offerSig) {
       await answerCall(offerSig.payload);
     } else {
-      const pc = await createPC();
-      pollRef.current = setInterval(async () => {
-        const r = await fetch(`${BASE}?action=call_signal`, { headers: authHeaders(token) });
-        const d = await r.json();
-        const offer = d.signals?.find((s: { from_user_id: number; type: string; payload: string }) => s.from_user_id === call.friendId && s.type === "offer");
-        if (offer) {
-          if (pollRef.current) clearInterval(pollRef.current);
-          await pc.setRemoteDescription(new RTCSessionDescription(JSON.parse(offer.payload)));
-          const answer = await pc.createAnswer();
-          await pc.setLocalDescription(answer);
-          await sendSignal("answer", JSON.stringify(answer));
-          setState("active");
-          durationRef.current = setInterval(() => setDuration(d => d + 1), 1000);
-          pollRef.current = setInterval(pollSignals, 1000);
-        }
-      }, 800);
+      await createPC();
+      // offer придёт через основной pollSignals цикл в handleSignals → answerCall
     }
   };
 
