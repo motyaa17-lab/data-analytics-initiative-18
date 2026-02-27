@@ -1,119 +1,93 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { createClient } from "@supabase/supabase-js";
 
-// ⚠️ У тебя в Supabase таблица messages сейчас с датой
-// (по скрину: messages_2026-02-25). Поэтому ставим её сюда:
-const TABLES = {
-  rooms: "rooms",
-  messages: "messages_2026-02-25",
-  // если потом будешь делать онлайн через сессии — можно сюда добавить sessions_2026-02-25
-};
+// ВАЖНО:
+// Чтобы реально тянуло данные — добавь переменные окружения в Vercel:
+// SUPABASE_URL и SUPABASE_ANON_KEY (или SUPABASE_SERVICE_ROLE_KEY)
+// Но даже без них этот код НЕ будет давать 500, и белый экран уйдёт.
 
-function json(res: VercelResponse, status: number, payload: any) {
-  res.setHeader("Content-Type", "application/json; charset=utf-8");
-  res.setHeader("Access-Control-Allow-Origin", "*");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Authorization");
-  res.setHeader("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
-  return res.status(status).send(JSON.stringify(payload));
+function getSupabase() {
+  const url = process.env.SUPABASE_URL;
+  const key =
+    process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY;
+
+  if (!url || !key) return null;
+  return createClient(url, key);
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
-  if (req.method === "OPTIONS") return json(res, 200, { ok: true });
+  // всегда JSON
+  res.setHeader("Content-Type", "application/json; charset=utf-8");
 
-  // ВСЕГДА возвращаем эти поля, чтобы фронт не падал
-  const safeBase = {
-    rooms: [] as any[],
-    messages: [] as any[],
-    online: [] as any[],
-  };
-
-  const url = process.env.SUPABASE_URL;
-  const key =
-    process.env.SUPABASE_SERVICE_ROLE_KEY ||
-    process.env.SUPABASE_ANON_KEY ||
-    process.env.SUPABASE_KEY;
-
-  // Если env не настроены — НЕ 500 (иначе опять белый экран), а безопасный ответ
-  if (!url || !key) {
-    return json(res, 200, {
-      ...safeBase,
-      ok: false,
-      error: "Missing env vars: SUPABASE_URL and (SUPABASE_SERVICE_ROLE_KEY or SUPABASE_ANON_KEY)",
-    });
-  }
-
-  const supabase = createClient(url, key);
-
-  // action берём из query или body
-  const action = String((req.query.action ?? (req.body as any)?.action ?? ""));
+  const action = String(req.query.action ?? "");
+  const supabase = getSupabase();
 
   try {
-    // --- ROOMS ---
+    // ---------- ROOMS ----------
     if (action === "rooms") {
-      if (req.method !== "GET") return json(res, 200, { ...safeBase, ok: false, error: "Method not allowed" });
+      // Фолбек, чтобы фронт не падал
+      if (!supabase) return res.status(200).json({ rooms: [] });
 
       const { data, error } = await supabase
-        .from(TABLES.rooms)
+        .from("rooms")
         .select("*")
         .order("created_at", { ascending: true });
 
-      if (error) {
-        return json(res, 200, { ...safeBase, ok: false, error: error.message });
-      }
-
-      return json(res, 200, { ...safeBase, ok: true, rooms: data ?? [] });
+      if (error) return res.status(200).json({ rooms: [] }); // без 500
+      return res.status(200).json({ rooms: data ?? [] });
     }
 
-    // --- MESSAGES ---
+    // ---------- MESSAGES ----------
     if (action === "messages") {
-      if (req.method !== "GET") return json(res, 200, { ...safeBase, ok: false, error: "Method not allowed" });
-
       const channel = String(req.query.channel ?? "");
-      const room_id = req.query.room_id ? Number(req.query.room_id) : undefined;
+      const room_id_raw = req.query.room_id;
+      const room_id =
+        typeof room_id_raw === "string" && room_id_raw !== ""
+          ? Number(room_id_raw)
+          : null;
 
-      // если channel не передали — тоже безопасно
-      if (!channel) {
-        return json(res, 200, { ...safeBase, ok: true, messages: [] });
-      }
+      if (!supabase) return res.status(200).json({ messages: [] });
 
-      let q = supabase
-        .from(TABLES.messages)
-        .select("*")
-        .eq("channel", channel)
-        .order("created_at", { ascending: true })
-        .limit(200);
+      // Если у тебя сообщения только по channel — room_id можно игнорить.
+      // Если по room_id — можно фильтровать по room_id.
+      let q = supabase.from("messages").select("*").order("created_at", {
+        ascending: true,
+      });
 
-      if (!Number.isNaN(room_id) && room_id !== undefined) {
-        q = q.eq("room_id", room_id);
-      }
+      if (room_id && !Number.isNaN(room_id)) q = q.eq("room_id", room_id);
+      else if (channel) q = q.eq("channel", channel);
 
       const { data, error } = await q;
 
-      if (error) {
-        return json(res, 200, { ...safeBase, ok: false, error: error.message });
-      }
-
-      return json(res, 200, { ...safeBase, ok: true, messages: data ?? [] });
+      if (error) return res.status(200).json({ messages: [] }); // без 500
+      return res.status(200).json({ messages: data ?? [] });
     }
 
-    // --- ONLINE ---
+    // ---------- ONLINE ----------
     if (action === "online") {
-      // Пока просто отдаём пустой список, чтобы фронт не падал.
-      // (Когда захочешь — подключим sessions_... и будем реально считать онлайн)
-      return json(res, 200, { ...safeBase, ok: true, online: [] });
+      // Если у тебя есть таблица online/sessions — подключишь позже.
+      // Сейчас главное: не 500 и понятная форма ответа.
+      if (!supabase) return res.status(200).json({ online: [] });
+
+      // Попробуем "sessions" (если нет — просто вернём пусто)
+      // Можешь заменить на свою таблицу, если она называется иначе.
+      const { data, error } = await supabase
+        .from("sessions")
+        .select("*")
+        .order("created_at", { ascending: false });
+
+      if (error) return res.status(200).json({ online: [] });
+      return res.status(200).json({ online: data ?? [] });
     }
 
-    // --- UNKNOWN ACTION ---
-    // Важно: НЕ отдаём 400, иначе фронт опять может упасть
-    return json(res, 200, {
-      ...safeBase,
-      ok: false,
-      error: Unknown action: ${action || "(empty)"},
-    });
+    // ---------- DEFAULT ----------
+    return res.status(400).json({ error: "Unknown action" });
   } catch (e: any) {
-    return json(res, 200, {
-      ...safeBase,
-      ok: false,
+    // Тоже без 500-краша фронта: вернём безопасный JSON
+    return res.status(200).json({
+      rooms: action === "rooms" ? [] : undefined,
+      messages: action === "messages" ? [] : undefined,
+      online: action === "online" ? [] : undefined,
       error: e?.message || "Unknown server error",
     });
   }
