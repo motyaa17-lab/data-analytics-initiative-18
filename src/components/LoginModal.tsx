@@ -28,11 +28,15 @@ const LoginModal = ({ onClose, onSuccess, onRegisterClick }: LoginModalProps) =>
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ email: form.email, password: form.password }),
     });
+    const data = await res.json();
+console.log("LOGIN RESPONSE:", data);
 
    // если сервер вернул ошибку
 if (!res.ok || data?.error) {
   setError(data?.error || "Ошибка входа. Попробуй ещё раз.");
+  setLoading(false);
   return;
+}
 }
 
 // если user не пришёл
@@ -44,10 +48,11 @@ if (!data?.user) {
 // у тебя нет token — передаём пустую строку
 onSuccess("", data.user);
 onClose();
-  } catch (err) {
-    setLoading(false);
-    setError("Ошибка подключения к серверу.");
-  }
+ } catch (err: any) {
+  console.error("LOGIN ERROR:", err);
+  setLoading(false);
+  setError(err?.message ? Ошибка: ${err.message} : "Ошибка подключения к серверу.");
+}
 };
 
   return (
