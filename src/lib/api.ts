@@ -1,10 +1,39 @@
 const BASE = "/api";
 
+type AnyObj = Record<string, any>;
+
 function headers(method: string, token?: string | null) {
   const h: Record<string, string> = {};
   if (method !== "GET") h["Content-Type"] = "application/json";
   if (token) h["X-Authorization"] = `Bearer ${token}`;
   return h;
+}
+
+async function safeParse(res: Response): Promise<any> {
+  const text = await res.text();
+  if (!text) return null;
+
+  try {
+    return JSON.parse(text);
+  } catch {
+    // если сервер вернул не-JSON (HTML/текст)
+    return { error: text || "Bad response" };
+  }
+}
+
+function asArray(x: any): any[] {
+  if (Array.isArray(x)) return x;
+  if (x && Array.isArray(x.items)) return x.items;
+  if (x && Array.isArray(x.data)) return x.data;
+  if (x && Array.isArray(x.messages)) return x.messages;
+  if (x && Array.isArray(x.rooms)) return x.rooms;
+  if (x && Array.isArray(x.users)) return x.users;
+  if (x && Array.isArray(x.logs)) return x.logs;
+  return [];
+}
+
+function asObject(x: any): AnyObj {
+  return x && typeof x === "object" ? x : {};
 }
 
 async function req(
@@ -14,179 +43,217 @@ async function req(
   body?: any,
   extra: Record<string, string> = {},
   attempt = 0
-) {
+): Promise<any> {
   const params = new URLSearchParams({ action, ...extra });
 
-  try {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 8000);
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 8000);
 
-    const res = await fetch(`${BASE}?${params}`, {
+  try {
+    const res = await fetch(`${BASE}?${params.toString()}`, {
       method,
       headers: headers(method, token),
-      body: body ? JSON.stringify(body) : undefined,
+      body: body !== undefined && method !== "GET" ? JSON.stringify(body) : undefined,
       signal: controller.signal,
     });
 
     clearTimeout(timeout);
 
-    // на всякий: если сервер вернул не-JSON
-    const text = await res.text();
-    try {
-      return JSON.parse(text);
-    } catch {
-      return { error: text || "Bad response" };
+    const data = await safeParse(res);
+
+    // ВАЖНО: если не ok — возвращаем объект ошибки, а не кидаем исключение
+    if (!res.ok) {
+      const msg =
+        (data && typeof data === "object" && (data.error || data.message)) ||
+        `HTTP ${res.status}`;
+      return { error: String(msg), status: res.status, details: data };
     }
+
+    return data;
   } catch (e) {
+    clearTimeout(timeout);
+
     if (attempt < 2) {
       await new Promise((r) => setTimeout(r, 1000));
       return req(action, method, token, body, extra, attempt + 1);
     }
+
     return { error: "Нет соединения с сервером" };
   }
 }
 
 export const api = {
   messages: {
-    get: (channel: string, token?: string | null, room_id?: number) =>
-      req(
+    get: async (channel: string, token: string | null, room_id?: number) => {
+      const r = await req(
         "messages",
         "GET",
         token ?? null,
         undefined,
         room_id ? { channel, room_id: String(room_id) } : { channel }
-      ),
+      );
+      return asArray(r);
+    },
 
-    send: (
+    send: async (
       token: string,
       content: string,
       channel: string,
       room_id?: number,
       image_url?: string
-    ) =>
-      req(
+    ) => {
+      const r = await req(
         "messages",
         "POST",
         token,
-        {
-          content,
-          channel,
-          ...(room_id ? { room_id } : {}),
-          ...(image_url ? { image_url } : {}),
-        },
+        { content, channel, ...(room_id ? { room_id } : {}), ...(image_url ? { image_url } : {}) },
         {}
-      ),
+      );
+      return r;
+    },
 
-    uploadImage: (token: string, image: string) =>
-      req("upload_image", "POST", token, { image }),
+    uploadImage: async (token: string, image: string) => {
+      const r = await req("upload_image", "POST", token, { image }, {});
+      return r;
+    },
 
-    uploadVoice: (token: string, audio: string, ext: string) =>
-      req("upload_voice", "POST", token, { audio, ext }),
+    uploadVoice: async (token: string, audio: string, ext: string) => {
+      const r = await req("upload_voice", "POST", token, { audio, ext }, {});
+      return r;
+    },
 
-    sendWithVoice: (
+    sendWithVoice: async (
       token: string,
       channel: string,
       voice_url: string,
       room_id?: number
-    ) =>
-      req(
+    ) => {
+      const r = await req(
         "messages",
         "POST",
         token,
         { content: "", channel, voice_url, ...(room_id ? { room_id } : {}) },
         {}
-      ),
+      );
+      return r;
+    },
 
-    remove: (token: string, msg_id: number) =>
-      req("delete_msg", "POST", token, { msg_id }),
+    remove: async (token: string, msg_id: number) => {
+      const r = await req("delete_msg", "POST", token, { msg_id }, {});
+      return r;
+    },
 
-    edit: (token: string, msg_id: number, content: string) =>
-      req("edit_msg", "POST", token, { msg_id, content }),
+    edit: async (token: string, msg_id: number, content: string) => {
+      const r = await req("edit_msg", "POST", token, { msg_id, content }, {});
+      return r;
+    },
   },
 
   reactions: {
-    add: (token: string, msg_id: number, emoji: string) =>
-      req("react", "POST", token, { msg_id, emoji }),
+    add: async (token: string, msg_id: number, emoji: string) => {
+      const r = await req("react", "POST", token, { msg_id, emoji }, {});
 
-    remove: (token: string, msg_id: number, emoji: string) =>
-      req("unreact", "POST", token, { msg_id, emoji }),
+
+return r;
+    },
+
+    remove: async (token: string, msg_id: number, emoji: string) => {
+      const r = await req("unreact", "POST", token, { msg_id, emoji }, {});
+      return r;
+    },
   },
 
   profile: {
-    get: (username: string) =>
-      req("profile", "GET", null, undefined, { username }),
+    get: async (username: string) => {
+      const r = await req("profile", "GET", null, undefined, { username });
+      return asObject(r);
+    },
 
-    uploadAvatar: (token: string, image: string) =>
-      req("upload_avatar", "POST", token, { image }),
+    uploadAvatar: async (token: string, image: string) => {
+      const r = await req("upload_avatar", "POST", token, { image }, {});
+      return r;
+    },
   },
 
   rooms: {
-    // ✅ КЛЮЧЕВОЙ ФИКС: всегда возвращаем массив, чтобы фронт не падал на .length
+    // КЛЮЧЕВОЕ: всегда массив, чтобы UI не падал на .length
     list: async (token?: string | null) => {
-      const r: any = await req("rooms", "GET", token ?? null);
-
-      if (Array.isArray(r)) return r;
-      if (Array.isArray(r?.rooms)) return r.rooms;
-
-      return [];
+      const r = await req("rooms", "GET", token ?? null, undefined, {});
+      return asArray(r);
     },
 
-    create: (token: string, name: string, description: string, is_public: boolean) =>
-      req("rooms", "POST", token, { name, description, is_public }),
-
-    join: (token: string, code: string) => {
-      const params = new URLSearchParams({ action: "join", code });
-      return fetch(`${BASE}?${params}`, {
-        method: "POST",
-        headers: headers("POST", token),
-      })
-        .then((r) => r.json())
-        .catch(() => ({ error: "Нет соединения с сервером" }));
+    create: async (
+      token: string,
+      name: string,
+      description: string,
+      is_public: boolean
+    ) => {
+      const r = await req("rooms", "POST", token, { name, description, is_public }, {});
+      return r;
     },
 
-    createInvite: (token: string, room_id: number) => {
-      const params = new URLSearchParams({
+    join: async (token: string, code: string) => {
+      // у тебя тут был ручной fetch — приводим к общему виду
+      const r = await req("rooms", "POST", token, undefined, { action: "join", code });
+      return r;
+    },
+
+    createInvite: async (token: string, room_id: number) => {
+      const r = await req("rooms", "POST", token, undefined, {
         action: "invite",
         room_id: String(room_id),
       });
-      return fetch(`${BASE}?${params}`, {
-
-
-method: "POST",
-        headers: headers("POST", token),
-      })
-        .then((r) => r.json())
-        .catch(() => ({ error: "Нет соединения с сервером" }));
+      return r;
     },
 
-    inviteFriend: (token: string, room_id: number, friend_id: number) =>
-      req("invite_friend", "POST", token, { room_id, friend_id }),
+    inviteFriend: async (token: string, room_id: number, friend_id: number) => {
+      const r = await req("invite_friend", "POST", token, { room_id, friend_id }, {});
+      return r;
+    },
   },
 
   online: {
-    get: () => req("online", "GET", null),
+    get: async () => {
+      const r = await req("online", "GET", null, undefined, {});
+      // вернём объект или false — главное не крашить
+      if (typeof r === "boolean") return r;
+      if (r && typeof r === "object" && typeof r.online === "boolean") return r.online;
+      return false;
+    },
   },
 
   settings: {
-    get: (token: string) => req("settings", "GET", token),
-    save: (token: string, data: { username?: string; favorite_game?: string }) =>
-      req("settings", "POST", token, data),
+    get: async (token: string) => {
+      const r = await req("settings", "GET", token, undefined, {});
+      return asObject(r);
+    },
+
+    save: async (token: string, data: { username?: string; favorite_game?: string }) => {
+      const r = await req("settings", "POST", token, data, {});
+      return r;
+    },
   },
 
   dm: {
-    get: (token: string, withId: number) =>
-      req("dm", "GET", token, undefined, { with: String(withId) }),
+    get: async (token: string, withId: number) => {
+      const r = await req("dm", "GET", token, undefined, { with: String(withId) });
+      return asArray(r);
+    },
 
-    send: (token: string, toId: number, content: string) =>
-      req("dm", "POST", token, { to: toId, content }),
+    send: async (token: string, toId: number, content: string) => {
+      const r = await req("dm", "POST", token, { to: toId, content }, {});
+      return r;
+    },
 
-    remove: (token: string, msg_id: number) =>
-      req("delete_dm", "POST", token, { msg_id }),
+    remove: async (token: string, msg_id: number) => {
+      const r = await req("delete_dm", "POST", token, { msg_id }, {});
+      return r;
+    },
   },
 
   typing: {
-    send: (token: string, channel?: string, dm_with?: number) =>
-      req(
+    send: async (token: string, channel?: string, dm_with?: number) => {
+      const r = await req(
         "typing_start",
         "POST",
         token,
@@ -195,10 +262,12 @@ method: "POST",
           ...(channel ? { channel } : {}),
           ...(dm_with ? { dm_with: String(dm_with) } : {}),
         }
-      ),
+      );
+      return r;
+    },
 
-    get: (token: string, channel?: string, dm_with?: number) =>
-      req(
+    get: async (token: string, channel?: string, dm_with?: number) => {
+      const r = await req(
         "typing_get",
         "GET",
         token,
@@ -207,47 +276,67 @@ method: "POST",
           ...(channel ? { channel } : {}),
           ...(dm_with ? { dm_with: String(dm_with) } : {}),
         }
-      ),
+      );
+      return asObject(r);
+    },
   },
 
   admin: {
-    stats: (token: string) => req("admin_stats", "GET", token),
-
-    logs: (token: string, limit = 50, level = "") => {
-      const extra: Record<string, string> = { limit: String(limit) };
-      if (level) extra.level = level;
-      return req("admin_logs", "GET", token, undefined, extra);
+    stats: async (token: string) => {
+      const r = await req("admin_stats", "GET", token, undefined, {});
+      return asObject(r);
     },
 
-    users: (token: string, q = "", limit = 50, offset = 0) => {
+    logs: async (token: string, limit = 50, level = "") => {
+      const extra: Record<string, string> = { limit: String(limit) };
+      if (level) extra.level = level;
+      const r = await req("admin_logs", "GET", token, undefined, extra);
+      return asArray(r);
+    },
+
+    users: async (token: string, q = "", limit = 50, offset = 0) => {
       const extra: Record<string, string> = {
         limit: String(limit),
         offset: String(offset),
       };
       if (q) extra.q = q;
-      return req("admin_users", "GET", token, undefined, extra);
+
+
+const r = await req("admin_users", "GET", token, undefined, extra);
+      return asArray(r);
     },
 
-    ban: (token: string, user_id: number, ban: boolean) =>
-      req("admin_ban", "POST", token, { user_id, ban }),
+    ban: async (token: string, user_id: number, ban: boolean) => {
+      const r = await req("admin_ban", "POST", token, { user_id, ban }, {});
+      return r;
+    },
 
-    messages: (token: string, channel?: string, room_id?: number, limit = 50) => {
+    messages: async (token: string, channel?: string, room_id?: number, limit = 50) => {
       const extra: Record<string, string> = { limit: String(limit) };
       if (channel) extra.channel = channel;
       if (room_id) extra.room_id = String(room_id);
-      return req("admin_messages", "GET", token, undefined, extra);
+      const r = await req("admin_messages", "GET", token, undefined, extra);
+      return asArray(r);
     },
 
-    clearChannel: (token: string, channel: string) =>
-      req("admin_clear", "POST", token, { channel }),
+    clearChannel: async (token: string, channel: string) => {
+      const r = await req("admin_clear", "POST", token, { channel }, {});
+      return r;
+    },
 
-    clearRoom: (token: string, room_id: number) =>
-      req("admin_clear", "POST", token, { room_id }),
+    clearRoom: async (token: string, room_id: number) => {
+      const r = await req("admin_clear", "POST", token, { room_id }, {});
+      return r;
+    },
 
-    deleteMsg: (token: string, msg_id: number) =>
-      req("admin_clear", "POST", token, { msg_id }),
+    deleteMsg: async (token: string, msg_id: number) => {
+      const r = await req("admin_clear", "POST", token, { msg_id }, {});
+      return r;
+    },
 
-    setBadge: (token: string, user_id: number, badge: string) =>
-      req("admin_set_badge", "POST", token, { user_id, badge }),
+    setBadge: async (token: string, user_id: number, badge: string) => {
+      const r = await req("admin_set_badge", "POST", token, { user_id, badge }, {});
+      return r;
+    },
   },
 };
