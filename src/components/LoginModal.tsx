@@ -3,7 +3,7 @@ import { X, Eye, EyeOff } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { User } from "@/hooks/useAuth";
 
-const LOGIN_URL = `${window.location.origin}/api/login`;
+const LOGIN_URL = "/api/login";
 
 interface LoginModalProps {
   onClose: () => void;
