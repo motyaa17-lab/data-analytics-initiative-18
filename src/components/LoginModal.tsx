@@ -18,17 +18,28 @@ const LoginModal = ({ onClose, onSuccess, onRegisterClick }: LoginModalProps) =>
   const [error, setError] = useState("");
 
   const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError("");
-    setLoading(true);
+  e.preventDefault();
+  setError("");
+  setLoading(true);
 
+  try {
     const res = await fetch(LOGIN_URL, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ email: form.email, password: form.password }),
     });
 
-    const data = await res.json();
+    const text = await res.text();
+
+    let data;
+    try {
+      data = JSON.parse(text);
+    } catch {
+      setError("Сервер вернул не JSON. Проверь API.");
+      setLoading(false);
+      return;
+    }
+
     setLoading(false);
 
     if (!res.ok || !data.success) {
@@ -38,7 +49,11 @@ const LoginModal = ({ onClose, onSuccess, onRegisterClick }: LoginModalProps) =>
 
     onSuccess(data.token, data.user);
     onClose();
-  };
+  } catch (err) {
+    setLoading(false);
+    setError("Ошибка подключения к серверу.");
+  }
+};
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4">
