@@ -215,17 +215,12 @@ export const api = {
       ),
   },
 
- admin: {
-  stats: (token: string) =>
-    req("admin_stats", "GET", token),
+admin: {
+  stats: (token: string) => req("admin_stats", "GET", token),
 
   logs: (token: string, limit = 50, level = "") => {
-    const extra: Record<string, string> = {
-      limit: String(limit),
-    };
-
+    const extra: Record<string, string> = { limit: String(limit) };
     if (level) extra.level = level;
-
     return req("admin_logs", "GET", token, undefined, extra);
   },
 
@@ -234,15 +229,12 @@ export const api = {
       limit: String(limit),
       offset: String(offset),
     };
-
     if (q) extra.q = q;
-
     return req("admin_users", "GET", token, undefined, extra);
   },
 
-ban: async (token: string, user_id: number, ban: boolean) => {
-  return await req("admin_ban", "POST", token, { user_id, ban }, {});
-},
+  ban: (token: string, user_id: number, ban: boolean) =>
+    req("admin_ban", "POST", token, { user_id, ban }),
 
   messages: (
     token: string,
@@ -250,13 +242,9 @@ ban: async (token: string, user_id: number, ban: boolean) => {
     room_id?: number,
     limit = 50
   ) => {
-    const extra: Record<string, string> = {
-      limit: String(limit),
-    };
-
+    const extra: Record<string, string> = { limit: String(limit) };
     if (channel) extra.channel = channel;
     if (room_id) extra.room_id = String(room_id);
-
     return req("admin_messages", "GET", token, undefined, extra);
   },
 
