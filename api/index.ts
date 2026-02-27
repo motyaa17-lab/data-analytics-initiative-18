@@ -32,24 +32,34 @@ export default async function handler(
   const supabase = createClient(url, key);
   const action = String(req.query.action || "");
 
-  try {
-    if (action === "rooms") {
-      const { data, error } = await supabase
-        .from("rooms")
-        .select("*")
-        .order("created_at", { ascending: true });
+try {
 
-      if (error) {
-        return res.status(500).json({ error: error.message });
-      }
+  if (action === "rooms") {
+    const { data, error } = await supabase
+      .from("rooms")
+      .select("*")
+      .order("created_at", { ascending: true });
 
-      return res.status(200).json({ rooms: data ?? [] });
+    if (error) {
+      return res.status(500).json({ error: error.message });
     }
 
-    return res.status(400).json({ error: "Unknown action" });
-  } catch (e: any) {
-    return res.status(500).json({
-      error: e.message || "Unknown server error",
-    });
+    return res.status(200).json({ rooms: data ?? [] });
   }
+
+  if (action === "messages") {
+    return res.status(200).json({ messages: [] });
+  }
+
+  if (action === "online") {
+    return res.status(200).json({ online: [] });
+  }
+
+  return res.status(400).json({ error: "Unknown action" });
+
+} catch (e: any) {
+  return res.status(500).json({
+    error: e.message || "Unknown server error",
+  });
+}
 }
