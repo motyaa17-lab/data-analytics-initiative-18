@@ -22,6 +22,11 @@ const handleSubmit = async (e: React.FormEvent) => {
   setError("");
   setLoading(true);
 
+  const handleSubmit = async (e: React.FormEvent) => {
+  e.preventDefault();
+  setError("");
+  setLoading(true);
+
   try {
     const res = await fetch(LOGIN_URL, {
       method: "POST",
@@ -37,27 +42,34 @@ const handleSubmit = async (e: React.FormEvent) => {
       data = JSON.parse(raw);
     } catch {
       setError("Сервер вернул не JSON. Проверь /api/login.");
-      setLoading(false);
       return;
     }
 
     if (!res.ok || data?.error) {
       setError(data?.error || "Ошибка входа. Попробуй ещё раз.");
-      setLoading(false);
       return;
     }
 
     if (!data?.user) {
       setError("User не пришёл из API.");
-      setLoading(false);
       return;
     }
 
     onSuccess("", data.user);
     onClose();
+  } catch (err) {
+    console.error("LOGIN ERROR:", err);
+    setError(err instanceof Error ? Ошибка: ${err.message} : "Ошибка подключения к серверу.");
+  } finally {
+    setLoading(false);
+  }
+};
+
+    onSuccess("", data.user);
+    onClose();
   } catch (err: any) {
     console.error("LOGIN ERROR:", err);
-    setError(err?.message ? Ошибка: ${err.message} : "Ошибка подключения к серверу.");
+   setError(err instanceof Error ? Ошибка: ${err.message} : "Ошибка подключения к серверу.");
   } finally {
     setLoading(false);
   }
