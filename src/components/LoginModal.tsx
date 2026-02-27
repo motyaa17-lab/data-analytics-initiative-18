@@ -21,15 +21,37 @@ const LoginModal = ({ onClose, onSuccess, onRegisterClick }: LoginModalProps) =>
   e.preventDefault();
   setError("");
   setLoading(true);
+const res = await fetch(LOGIN_URL, {
+  method: "POST",
+  headers: { "Content-Type": "application/json" },
+  body: JSON.stringify({ email: form.email, password: form.password }),
+});
 
-  try {
-    const res = await fetch(LOGIN_URL, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email: form.email, password: form.password }),
-    });
-    const data = await res.json();
-console.log("LOGIN RESPONSE:", data);
+const raw = await res.text();
+console.log("RAW:", raw);
+
+// пробуем распарсить JSON, но если это HTML/текст — не падаем
+let data: any = null;
+try {
+  data = JSON.parse(raw);
+} catch {}
+
+// если статус не 200-299 — показываем норм ошибку
+if (!res.ok) {
+  setError(data?.error || `Ошибка ${res.status}: API вернул не JSON`);
+  setLoading(false);
+  return;
+}
+
+// если success-логика
+if (!data?.user) {
+  setError("User не пришёл из API.");
+  setLoading(false);
+  return;
+}
+
+onSuccess("", data.user);
+onClose()
 
    // если сервер вернул ошибку
 if (!res.ok || data?.error) {
