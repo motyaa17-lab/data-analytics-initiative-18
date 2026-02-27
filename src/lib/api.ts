@@ -215,45 +215,63 @@ export const api = {
       ),
   },
 
-  admin: {
-    stats: (token: string) => req("admin_stats", "GET", token),
+ admin: {
+  stats: (token: string) =>
+    req("admin_stats", "GET", token),
 
-    logs: (token: string, limit = 50, level = "") => {
-      const extra: Record<string, string> = { limit: String(limit) };
-      if (level) extra.level = level;
-      return req("admin_logs", "GET", token, undefined, extra);
-    },
+  logs: (token: string, limit = 50, level = "") => {
+    const extra: Record<string, string> = {
+      limit: String(limit),
+    };
 
-    users: (token: string, q = "", limit = 50, offset = 0) => {
-      const extra: Record<string, string> = {
-        limit: String(limit),
-        offset: String(offset),
-      };
-      if (q) extra.q = q;
-      return req("admin_users", "GET", token, undefined, extra);
-    },
+    if (level) extra.level = level;
 
-    // ВОТ ТУТ БЫЛА ТВОЯ ОШИБКА СБОРКИ: "ser_id" -> "user_id"
-    ban: (token: string, user_id: number, ban: boolean) =>
-      req("admin_ban", "POST", token, { user_id, ban }, {}),
-
-    messages: (token: string, channel?: string, room_id?: number, limit = 50) => {
-      const extra: Record<string, string> = { limit: String(limit) };
-      if (channel) extra.channel = channel;
-      if (room_id) extra.room_id = String(room_id);
-      return req("admin_messages", "GET", token, undefined, extra);
-    },
-
-    clearChannel: (token: string, channel: string) =>
-      req("admin_clear", "POST", token, { channel }, {}),
-
-    clearRoom: (token: string, room_id: number) =>
-      req("admin_clear", "POST", token, { room_id }, {}),
-
-    deleteMsg: (token: string, msg_id: number) =>
-      req("admin_clear", "POST", token, { msg_id }, {}),
-
-    setBadge: (token: string, user_id: number, badge: string) =>
-      req("admin_set_badge", "POST", token, { user_id, badge }, {}),
+    return req("admin_logs", "GET", token, undefined, extra);
   },
-}; req
+
+  users: (token: string, q = "", limit = 50, offset = 0) => {
+    const extra: Record<string, string> = {
+      limit: String(limit),
+      offset: String(offset),
+    };
+
+    if (q) extra.q = q;
+
+    return req("admin_users", "GET", token, undefined, extra);
+  },
+
+  ban: async (token: string, user_id: number, ban: boolean) => {
+    return await req("admin_ban", "POST", token, {
+      user_id,
+      ban,
+    });
+  },
+
+  messages: (
+    token: string,
+    channel?: string,
+    room_id?: number,
+    limit = 50
+  ) => {
+    const extra: Record<string, string> = {
+      limit: String(limit),
+    };
+
+    if (channel) extra.channel = channel;
+    if (room_id) extra.room_id = String(room_id);
+
+    return req("admin_messages", "GET", token, undefined, extra);
+  },
+
+  clearChannel: (token: string, channel: string) =>
+    req("admin_clear", "POST", token, { channel }),
+
+  clearRoom: (token: string, room_id: number) =>
+    req("admin_clear", "POST", token, { room_id }),
+
+  deleteMsg: (token: string, msg_id: number) =>
+    req("admin_clear", "POST", token, { msg_id }),
+
+  setBadge: (token: string, user_id: number, badge: string) =>
+    req("admin_set_badge", "POST", token, { user_id, badge }),
+},
