@@ -22,11 +22,6 @@ const handleSubmit = async (e: React.FormEvent) => {
   setError("");
   setLoading(true);
 
-  const handleSubmit = async (e: React.FormEvent) => {
-  e.preventDefault();
-  setError("");
-  setLoading(true);
-
   try {
     const res = await fetch(LOGIN_URL, {
       method: "POST",
