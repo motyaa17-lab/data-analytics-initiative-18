@@ -12,10 +12,21 @@ const CHANNELS = [
   { id: "teammates", label: "поиск-тиммейтов" },
 ];
 
-function getAvatarColor(username: string) {
-  const colors = ["from-purple-500 to-pink-500", "from-green-500 to-blue-500", "from-orange-500 to-red-500", "from-[#5865f2] to-[#7c3aed]"];
+function getAvatarColor(username?: string) {
+  const colors = [
+    "from-purple-500 to-pink-500",
+    "from-green-500 to-blue-500",
+    "from-orange-500 to-red-500",
+    "from-[#5865f2] to-[#7c3aed]",
+  ];
+
+  const name = username ?? ""; // <- главное
   let hash = 0;
-  for (let i = 0; i < username.length; i++) hash = username.charCodeAt(i) + ((hash << 5) - hash);
+
+  for (let i = 0; i < name.length; i++) {
+    hash = name.charCodeAt(i) + ((hash << 5) - hash);
+  }
+
   return colors[Math.abs(hash) % colors.length];
 }
 
