@@ -29,26 +29,21 @@ const LoginModal = ({ onClose, onSuccess, onRegisterClick }: LoginModalProps) =>
       body: JSON.stringify({ email: form.email, password: form.password }),
     });
 
-    const text = await res.text();
+   // если сервер вернул ошибку
+if (!res.ok || data?.error) {
+  setError(data?.error || "Ошибка входа. Попробуй ещё раз.");
+  return;
+}
 
-    let data;
-    try {
-      data = JSON.parse(text);
-    } catch {
-      setError("Сервер вернул не JSON. Проверь API.");
-      setLoading(false);
-      return;
-    }
+// если user не пришёл
+if (!data?.user) {
+  setError("User не пришёл из API.");
+  return;
+}
 
-    setLoading(false);
-
-    if (!res.ok || !data.success) {
-      setError(data.error || "Ошибка входа. Попробуй ещё раз.");
-      return;
-    }
-
-    onSuccess(data.token, data.user);
-    onClose();
+// у тебя нет token — передаём пустую строку
+onSuccess("", data.user);
+onClose();
   } catch (err) {
     setLoading(false);
     setError("Ошибка подключения к серверу.");
