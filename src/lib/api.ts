@@ -240,12 +240,9 @@ export const api = {
     return req("admin_users", "GET", token, undefined, extra);
   },
 
-  ban: async (token: string, user_id: number, ban: boolean) => {
-    return await req("admin_ban", "POST", token, {
-      user_id,
-      ban,
-    });
-  },
+ban: async (token: string, user_id: number, ban: boolean) => {
+  return await req("admin_ban", "POST", token, { user_id, ban }, {});
+},
 
   messages: (
     token: string,
