@@ -40,20 +40,13 @@ const handleSubmit = async (e: React.FormEvent) => {
 
     onSuccess(data?.token ?? "", data.user);
     onClose();
-
-  } catch (err) {
-    console.error("LOGIN ERROR:", err);
-    setError(
-      err instanceof Error
-        ? err.message
-        : "Ошибка подключения к серверу."
+    
     );
   } finally {
     setLoading(false);
   }
 };
-    onSuccess("", data.user);
-    onClose();
+
   } catch (err: any) {
     console.error("LOGIN ERROR:", err);
    setError(err instanceof Error ? Ошибка: ${err.message} : "Ошибка подключения к серверу.");
@@ -61,17 +54,6 @@ const handleSubmit = async (e: React.FormEvent) => {
     setLoading(false);
   }
 };
-
-    onSuccess(data?.token ?? "", data.user);
-    onClose();
-  } catch (err: any) {
-    console.error("LOGIN ERROR:", err);
-    setError(err?.message || "Ошибка подключения к серверу.");
-  } finally {
-    setLoading(false);
-  }
-}
-}
 
    // если сервер вернул ошибку
 if (!res.ok || data?.error) {
