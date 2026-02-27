@@ -330,11 +330,11 @@ const ChannelsSidebar = ({ mobileSidebarOpen, onClose, activeChannel, activeRoom
             <>
               <button
                 className="flex items-center gap-2 flex-1 min-w-0 hover:bg-[#40444b] rounded-lg p-1 -m-1 transition-colors text-left"
-                onClick={() => onProfileClick?.(user.username)}
+              onClick={() => onProfileClick?.(user?.username ?? "")}
                 title="Мой профиль"
               >
-                <div className={`w-10 h-10 bg-gradient-to-r ${getAvatarColor(user.username)} rounded-full flex items-center justify-center flex-shrink-0`}>
-                  <span className="text-white text-base font-semibold">{user.username[0].toUpperCase()}</span>
+                <div className={`... ${getAvatarColor(user?.username ?? "")} ...`}>
+               {(user?.username?.[0] ?? "?").toUpperCase()}
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="text-white text-base lg:text-sm font-medium truncate">{user.username}</div>
