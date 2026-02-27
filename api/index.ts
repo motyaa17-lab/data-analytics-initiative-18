@@ -1,22 +1,7 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { createClient } from "@supabase/supabase-js";
 
-function setCors(res: VercelResponse) {
-  res.setHeader("Access-Control-Allow-Origin", "*");
-  res.setHeader("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
-}
-
-export default async function handler(
-  req: VercelRequest,
-  res: VercelResponse
-) {
-  setCors(res);
-
-  if (req.method === "OPTIONS") {
-    return res.status(200).end();
-  }
-
+export default async function handler(req: VercelRequest, res: VercelResponse) {
   const url = process.env.SUPABASE_URL;
   const key =
     process.env.SUPABASE_SERVICE_ROLE_KEY ||
@@ -24,42 +9,65 @@ export default async function handler(
 
   if (!url || !key) {
     return res.status(500).json({
-      error:
-        "Missing env vars: SUPABASE_URL and (SUPABASE_SERVICE_ROLE_KEY or SUPABASE_ANON_KEY)",
+      rooms: [],
+      error: "Missing SUPABASE env variables",
     });
   }
 
   const supabase = createClient(url, key);
   const action = String(req.query.action || "");
 
-try {
+  try {
+    // ================= ROOMS =================
+    if (action === "rooms") {
+      const { data, error } = await supabase
+        .from("rooms")
+        .select("*")
+        .order("created_at", { ascending: true });
 
-  if (action === "rooms") {
-    const { data, error } = await supabase
-      .from("rooms")
-      .select("*")
-      .order("created_at", { ascending: true });
+      if (error) {
+        return res.status(200).json({
+          rooms: [],
+          error: error.message,
+        });
+      }
 
-    if (error) {
-      return res.status(500).json({ error: error.message });
+      return res.status(200).json({
+        rooms: data || [],
+      });
     }
 
-    return res.status(200).json({ rooms: data ?? [] });
+    // ================= CREATE ROOM =================
+    if (action === "rooms" && req.method === "POST") {
+      const { name, description, is_public } = req.body;
+
+      const { data, error } = await supabase
+        .from("rooms")
+        .insert([{ name, description, is_public }])
+        .select()
+        .single();
+
+      if (error) {
+        return res.status(200).json({
+          room: null,
+          error: error.message,
+        });
+      }
+
+      return res.status(200).json({
+        room: data,
+      });
+    }
+
+    return res.status(400).json({
+      rooms: [],
+      error: "Unknown action",
+    });
+
+  } catch (e: any) {
+    return res.status(200).json({
+      rooms: [],
+      error: e.message || "Server error",
+    });
   }
-
-  if (action === "messages") {
-    return res.status(200).json({ messages: [] });
-  }
-
-  if (action === "online") {
-    return res.status(200).json({ online: [] });
-  }
-
-  return res.status(400).json({ error: "Unknown action" });
-
-} catch (e: any) {
-  return res.status(500).json({
-    error: e.message || "Unknown server error",
-  });
-}
 }
