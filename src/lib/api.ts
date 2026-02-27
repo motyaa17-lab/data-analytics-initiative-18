@@ -9,6 +9,7 @@ function headers(method: string, token?: string | null) {
   return h;
 }
 
+// На всякий: если сервер вернул не-JSON (HTML/текст)
 async function safeParse(res: Response): Promise<any> {
   const text = await res.text();
   if (!text) return null;
@@ -16,11 +17,11 @@ async function safeParse(res: Response): Promise<any> {
   try {
     return JSON.parse(text);
   } catch {
-    // если сервер вернул не-JSON (HTML/текст)
     return { error: text || "Bad response" };
   }
 }
 
+// Гарантируем массив, чтобы UI не падал на .length
 function asArray(x: any): any[] {
   if (Array.isArray(x)) return x;
   if (x && Array.isArray(x.items)) return x.items;
@@ -61,7 +62,7 @@ async function req(
 
     const data = await safeParse(res);
 
-    // ВАЖНО: если не ok — возвращаем объект ошибки, а не кидаем исключение
+    // Важно: не кидаем исключение — возвращаем объект ошибки
     if (!res.ok) {
       const msg =
         (data && typeof data === "object" && (data.error || data.message)) ||
@@ -106,7 +107,12 @@ export const api = {
         "messages",
         "POST",
         token,
-        { content, channel, ...(room_id ? { room_id } : {}), ...(image_url ? { image_url } : {}) },
+        {
+          content,
+          channel,
+          ...(room_id ? { room_id } : {}),
+          ...(image_url ? { image_url } : {}),
+        },
         {}
       );
       return r;
@@ -122,12 +128,7 @@ export const api = {
       return r;
     },
 
-    sendWithVoice: async (
-      token: string,
-      channel: string,
-      voice_url: string,
-      room_id?: number
-    ) => {
+    sendWithVoice: async (token: string, channel: string, voice_url: string, room_id?: number) => {
       const r = await req(
         "messages",
         "POST",
@@ -151,10 +152,10 @@ export const api = {
 
   reactions: {
     add: async (token: string, msg_id: number, emoji: string) => {
-      const r = await req("react", "POST", token, { msg_id, emoji }, {});
 
 
-return r;
+r = await req("react", "POST", token, { msg_id, emoji }, {});
+      return r;
     },
 
     remove: async (token: string, msg_id: number, emoji: string) => {
@@ -182,27 +183,19 @@ return r;
       return asArray(r);
     },
 
-    create: async (
-      token: string,
-      name: string,
-      description: string,
-      is_public: boolean
-    ) => {
+    create: async (token: string, name: string, description: string, is_public: boolean) => {
       const r = await req("rooms", "POST", token, { name, description, is_public }, {});
       return r;
     },
 
+    // join/invite НЕ через "rooms" action — иначе action перезатирается и сервер отвечает 400/500
     join: async (token: string, code: string) => {
-      // у тебя тут был ручной fetch — приводим к общему виду
-      const r = await req("rooms", "POST", token, undefined, { action: "join", code });
+      const r = await req("join", "POST", token, undefined, { code });
       return r;
     },
 
     createInvite: async (token: string, room_id: number) => {
-      const r = await req("rooms", "POST", token, undefined, {
-        action: "invite",
-        room_id: String(room_id),
-      });
+      const r = await req("invite", "POST", token, undefined, { room_id: String(room_id) });
       return r;
     },
 
@@ -215,7 +208,7 @@ return r;
   online: {
     get: async () => {
       const r = await req("online", "GET", null, undefined, {});
-      // вернём объект или false — главное не крашить
+      // главное — не крашить UI
       if (typeof r === "boolean") return r;
       if (r && typeof r === "object" && typeof r.online === "boolean") return r.online;
       return false;
@@ -253,30 +246,18 @@ return r;
 
   typing: {
     send: async (token: string, channel?: string, dm_with?: number) => {
-      const r = await req(
-        "typing_start",
-        "POST",
-        token,
-        {},
-        {
-          ...(channel ? { channel } : {}),
-          ...(dm_with ? { dm_with: String(dm_with) } : {}),
-        }
-      );
+      const r = await req("typing_start", "POST", token, {}, {
+        ...(channel ? { channel } : {}),
+        ...(dm_with ? { dm_with: String(dm_with) } : {}),
+      });
       return r;
     },
 
     get: async (token: string, channel?: string, dm_with?: number) => {
-      const r = await req(
-        "typing_get",
-        "GET",
-        token,
-        undefined,
-        {
-          ...(channel ? { channel } : {}),
-          ...(dm_with ? { dm_with: String(dm_with) } : {}),
-        }
-      );
+      const r = await req("typing_get", "GET", token, undefined, {
+        ...(channel ? { channel } : {}),
+        ...(dm_with ? { dm_with: String(dm_with) } : {}),
+      });
       return asObject(r);
     },
   },
@@ -295,18 +276,16 @@ return r;
     },
 
     users: async (token: string, q = "", limit = 50, offset = 0) => {
-      const extra: Record<string, string> = {
-        limit: String(limit),
-        offset: String(offset),
-      };
+      const extra: Record<string, string> = { limit: String(limit), offset: String(offset) };
       if (q) extra.q = q;
-
-
-const r = await req("admin_users", "GET", token, undefined, extra);
+      const r = await req("admin_users", "GET", token, undefined, extra);
       return asArray(r);
     },
 
-    ban: async (token: string, user_id: number, ban: boolean) => {
+    ban: async (token: string, u
+
+
+ser_id: number, ban: boolean) => {
       const r = await req("admin_ban", "POST", token, { user_id, ban }, {});
       return r;
     },
@@ -339,4 +318,4 @@ const r = await req("admin_users", "GET", token, undefined, extra);
       return r;
     },
   },
-};
+}; const
