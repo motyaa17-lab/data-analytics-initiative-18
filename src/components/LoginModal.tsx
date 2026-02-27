@@ -14,7 +14,10 @@ const handleSubmit = async (e: React.FormEvent) => {
     const res = await fetch(LOGIN_URL, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email: form.email, password: form.password }),
+      body: JSON.stringify({
+        email: form.email,
+        password: form.password,
+      }),
     });
 
     const raw = await res.text();
@@ -24,7 +27,7 @@ const handleSubmit = async (e: React.FormEvent) => {
     try {
       data = JSON.parse(raw);
     } catch {
-      throw new Error("Сервер вернул не JSON. Проверь /api/login (скорее всего 404/HTML).");
+      throw new Error("Сервер вернул не JSON (возможно 404 HTML).");
     }
 
     if (!res.ok || data?.error) {
@@ -37,14 +40,18 @@ const handleSubmit = async (e: React.FormEvent) => {
 
     onSuccess(data?.token ?? "", data.user);
     onClose();
+
   } catch (err) {
     console.error("LOGIN ERROR:", err);
-    setError(err instanceof Error ? err.message : "Ошибка подключения к серверу.");
+    setError(
+      err instanceof Error
+        ? err.message
+        : "Ошибка подключения к серверу."
+    );
   } finally {
     setLoading(false);
   }
 };
-
     onSuccess("", data.user);
     onClose();
   } catch (err: any) {
@@ -65,9 +72,6 @@ const handleSubmit = async (e: React.FormEvent) => {
   }
 }
 }
-
-onSuccess("", data.user);
-onClose()
 
    // если сервер вернул ошибку
 if (!res.ok || data?.error) {
