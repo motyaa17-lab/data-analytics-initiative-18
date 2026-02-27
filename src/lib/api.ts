@@ -7,17 +7,6 @@ function headers(method: string, token?: string | null) {
   return h;
 }
 
-// Всегда превращаем ответ в массив (чтобы фронт не падал на .length)
-function asArray<T = any>(x: any): T[] {
-  if (Array.isArray(x)) return x;
-  if (Array.isArray(x?.items)) return x.items;
-  if (Array.isArray(x?.data)) return x.data;
-  if (Array.isArray(x?.rooms)) return x.rooms;
-  if (Array.isArray(x?.messages)) return x.messages;
-  if (Array.isArray(x?.result)) return x.result;
-  return [];
-}
-
 async function req(
   action: string,
   method: string,
@@ -28,11 +17,11 @@ async function req(
 ) {
   const params = new URLSearchParams({ action, ...extra });
 
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 8000);
-
   try {
-    const res = await fetch(`${BASE}?${params.toString()}`, {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 8000);
+
+    const res = await fetch(`${BASE}?${params}`, {
       method,
       headers: headers(method, token),
       body: body ? JSON.stringify(body) : undefined,
@@ -41,99 +30,99 @@ async function req(
 
     clearTimeout(timeout);
 
-    // Иногда сервер может вернуть HTML/текст — безопасно читаем текст
+    // иногда сервер может вернуть НЕ-JSON
     const text = await res.text();
 
     let data: any;
     try {
       data = text ? JSON.parse(text) : {};
     } catch {
-      data = { error: text || "Bad response", status: res.status };
+      data = { error: text || "Bad response" };
     }
 
-    // Если статус не ОК — тоже отдаём объект с ошибкой, но НЕ кидаем исключение
-    if (!res.ok) {
-      return {
-        error: data?.error || data?.message || `HTTP ${res.status}`,
-        status: res.status,
-        ...data,
-      };
+    // если HTTP не OK — тоже возвращаем ошибку
+    if (!res.ok && !data?.error) {
+      data = { error: `HTTP ${res.status}: ${res.statusText}`, ...data };
     }
 
     return data;
   } catch (e) {
-    clearTimeout(timeout);
-
     if (attempt < 2) {
-      await new Promise((r) => setTimeout(r, 800));
+      await new Promise((r) => setTimeout(r, 1000));
       return req(action, method, token, body, extra, attempt + 1);
     }
-
     return { error: "Нет соединения с сервером" };
   }
 }
 
+// гарантируем массив (чтобы фронт не падал на .length)
+function asArray<T = any>(x: any): T[] {
+  if (Array.isArray(x)) return x;
+  if (Array.isArray(x?.items)) return x.items;
+  if (Array.isArray(x?.data)) return x.data;
+  if (Array.isArray(x?.messages)) return x.messages;
+  if (Array.isArray(x?.result)) return x.result;
+  if (Array.isArray(x?.rooms)) return x.rooms;
+  return [];
+}
+
 export const api = {
   messages: {
-    get: async (channel: string, token: string | null, room_id?: number) => {
-      const r = await req(
+    get: (channel?: string, token?: string | null, room_id?: number) =>
+      req(
         "messages",
         "GET",
         token ?? null,
         undefined,
-        room_id ? { channel, room_id: String(room_id) } : { channel }
-      );
-      // ВАЖНО: всегда массив
-      return asArray(r);
-    },
-
-    send: (token: string, content: string, channel: string, room_id?: number, image_url?: string) =>
-      req(
-        "messages",
-        "POST",
-        token,
-        {
-          content,
-          channel,
-          ...(room_id ? { room_id } : {}),
-          ...(image_url ? { image_url } : {}),
-        },
-        {}
+        room_id ? { channel: channel ?? "", room_id: String(room_id) } : channel ? { channel } : {}
       ),
+
+    send: (
+      token: string,
+      content: string,
+      channel?: string,
+      room_id?: number,
+      image_url?: string
+    ) =>
+      req("messages", "POST", token, {
+        content,
+        ...(channel ? { channel } : {}),
+        ...(room_id ? { room_id } : {}),
+        ...(image_url ? { image_url } : {}),
+      }),
 
     uploadImage: (token: string, image: string) =>
-      req("upload_image", "POST", token, { image }, {}),
+      req("upload_image", "POST", token, { image }),
 
     uploadVoice: (token: string, audio: string, ext: string) =>
-      req("upload_voice", "POST", token, { audio, ext }, {}),
+      req("upload_voice", "POST", token, { audio, ext }),
 
-    sendWithVoice: (token: string, channel: string, voice_url: string, room_id?: number) =>
-      req(
-        "messages",
-        "POST",
-        token,
-        {
-          content: "",
-          channel,
-          voice_url,
-          ...(room_id ? { room_id } : {}),
-        },
-        {}
-      ),
+    sendWithVoice: (
+      token: string,
+      channel: string,
+      voice_url: string,
+      room_id?: number
+    ) =>
+      req("messages", "POST", token, {
+        content: "",
+        channel,
+        voice_url,
+        ...(room_id ? { room_id } : {}),
+      }),
 
     remove: (token: string, msg_id: number) =>
-      req("delete_msg", "POST", token, { msg_id }, {}),
+      req("delete_msg", "POST", token, { msg_id }),
 
     edit: (token: string, msg_id: number, content: string) =>
-      req("edit_msg", "POST", token, { msg_id, content }, {}),
+      req("edit_msg", "POST", token, { msg_id, content }),
   },
 
   reactions: {
     add: (token: string, msg_id: number, emoji: string) =>
-      req("react", "POST", token, { msg_id, emoji }, {}),
+      req("react", "POST", token, { msg_id, emoji }),
 
     remove: (token: string, msg_id: number, emoji: string) =>
-      req("unreact", "POST", token, { msg_id, emoji }, {}),
+      req("unreact", "POST", token, { msg_id, emoji }),
   },
 
   profile: {
@@ -141,30 +130,29 @@ export const api = {
       req("profile", "GET", null, undefined, { username }),
 
     uploadAvatar: (token: string, image: string) =>
-      req("upload_avatar", "POST", token, { image }, {}),
+      req("upload_avatar", "POST", token, { image }),
   },
 
   rooms: {
-    // КЛЮЧЕВО: возвращаем массив, даже если сервер вернул ошибку
+    // КЛЮЧЕВОЙ ФИКС: всегда возвращаем массив, чтобы фронт не падал на .length
     list: async (token?: string | null) => {
-      const r = await
-
-
-("rooms", "GET", token ?? null);
+      const r: any = await req("rooms", "GET", token ?? null);
       return asArray(r);
     },
 
     create: (token: string, name: string, description: string, is_public: boolean) =>
-      req("rooms", "POST", token, { name, description, is_public }, {}),
+      req("rooms", "POST", token, { name, description, is_public }),
 
     join: (token: string, code: string) =>
-      req("join", "POST", token, undefined, { code }),
+
+
+("join", "POST", token, undefined, { code }),
 
     createInvite: (token: string, room_id: number) =>
-      req("invite", "POST", token, undefined, { room_id: String(room_id) }),
+      req("invite", "POST", token, { room_id }),
 
     inviteFriend: (token: string, room_id: number, friend_id: number) =>
-      req("invite_friend", "POST", token, { room_id, friend_id }, {}),
+      req("invite_friend", "POST", token, { room_id, friend_id }),
   },
 
   online: {
@@ -175,18 +163,23 @@ export const api = {
     get: (token: string) => req("settings", "GET", token),
 
     save: (token: string, data: { username?: string; favorite_game?: string }) =>
-      req("settings", "POST", token, data, {}),
+      req("settings", "POST", token, data),
   },
 
   dm: {
+    list: async (token?: string | null) => {
+      const r: any = await req("dm", "GET", token ?? null);
+      return asArray(r);
+    },
+
     get: (token: string, withId: number) =>
       req("dm", "GET", token, undefined, { with: String(withId) }),
 
     send: (token: string, toId: number, content: string) =>
-      req("dm", "POST", token, { to: toId, content }, {}),
+      req("dm", "POST", token, { to: toId, content }),
 
     remove: (token: string, msg_id: number) =>
-      req("delete_dm", "POST", token, { msg_id }, {}),
+      req("delete_dm", "POST", token, { msg_id }),
   },
 
   typing: {
@@ -215,48 +208,45 @@ export const api = {
       ),
   },
 
-admin: {
-  stats: (token: string) => req("admin_stats", "GET", token),
+  admin: {
+    stats: (token: string) => req("admin_stats", "GET", token),
 
-  logs: (token: string, limit = 50, level = "") => {
-    const extra: Record<string, string> = { limit: String(limit) };
-    if (level) extra.level = level;
-    return req("admin_logs", "GET", token, undefined, extra);
+    logs: (token: string, limit = 50, level = "") => {
+      const extra: Record<string, string> = { limit: String(limit) };
+      if (level) extra.level = level;
+      return req("admin_logs", "GET", token, undefined, extra);
+    },
+
+    users: (token: string, q = "", limit = 50, offset = 0) => {
+      const extra: Record<string, string> = {
+        limit: String(limit),
+        offset: String(offset),
+      };
+      if (q) extra.q = q;
+      return req("admin_users", "GET", token, undefined, extra);
+    },
+
+    // ВАЖНО: здесь именно "ban:" как поле объекта + запятая в конце
+    ban: (token: string, user_id: number, ban: boolean) =>
+      req("admin_ban", "POST", token, { user_id, ban }),
+
+    messages: (token: string, channel?: string, room_id?: number, limit = 50) => {
+      const extra: Record<string, string> = { limit: String(limit) };
+      if (channel) extra.channel = channel;
+      if (room_id) extra.room_id = String(room_id);
+      return req("admin_messages", "GET", token, undefined, extra);
+    },
+
+    clearChannel: (token: string, channel: string) =>
+      req("admin_clear", "POST", token, { channel }),
+
+    clearRoom: (token: string, room_id: number) =>
+      req("admin_clear", "POST", token, { room_id }),
+
+    deleteMsg: (token: string, msg_id: number) =>
+      req("admin_clear", "POST", token, { msg_id }),
+
+    setBadge: (token: string, user_id: number, badge: string) =>
+      req("admin_set_badge", "POST", token, { user_id, badge }),
   },
-
-  users: (token: string, q = "", limit = 50, offset = 0) => {
-    const extra: Record<string, string> = {
-      limit: String(limit),
-      offset: String(offset),
-    };
-    if (q) extra.q = q;
-    return req("admin_users", "GET", token, undefined, extra);
-  },
-
-  ban: (token: string, user_id: number, ban: boolean) =>
-    req("admin_ban", "POST", token, { user_id, ban }),
-
-  messages: (
-    token: string,
-    channel?: string,
-    room_id?: number,
-    limit = 50
-  ) => {
-    const extra: Record<string, string> = { limit: String(limit) };
-    if (channel) extra.channel = channel;
-    if (room_id) extra.room_id = String(room_id);
-    return req("admin_messages", "GET", token, undefined, extra);
-  },
-
-  clearChannel: (token: string, channel: string) =>
-    req("admin_clear", "POST", token, { channel }),
-
-  clearRoom: (token: string, room_id: number) =>
-    req("admin_clear", "POST", token, { room_id }),
-
-  deleteMsg: (token: string, msg_id: number) =>
-    req("admin_clear", "POST", token, { msg_id }),
-
-  setBadge: (token: string, user_id: number, badge: string) =>
-    req("admin_set_badge", "POST", token, { user_id, badge }),
-},
+}; req
