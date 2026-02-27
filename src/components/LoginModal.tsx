@@ -17,7 +17,7 @@ const LoginModal = ({ onClose, onSuccess, onRegisterClick }: LoginModalProps) =>
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
- const handleSubmit = async (e: React.FormEvent) => {
+const handleSubmit = async (e: React.FormEvent) => {
   e.preventDefault();
   setError("");
   setLoading(true);
@@ -26,29 +26,42 @@ const LoginModal = ({ onClose, onSuccess, onRegisterClick }: LoginModalProps) =>
     const res = await fetch(LOGIN_URL, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        email: form.email,
-        password: form.password,
-      }),
+      body: JSON.stringify({ email: form.email, password: form.password }),
     });
 
     const raw = await res.text();
-    console.log("LOGIN RAW:", raw);
+    console.log("RAW:", raw);
 
-    let data: any;
+    let data: any = null;
     try {
       data = JSON.parse(raw);
     } catch {
-      throw new Error("API вернул не JSON (возможно 404/HTML).");
+      setError("Сервер вернул не JSON. Проверь /api/login.");
+      setLoading(false);
+      return;
     }
 
     if (!res.ok || data?.error) {
-      throw new Error(data?.error || "Ошибка входа. Попробуй ещё раз.");
+      setError(data?.error || "Ошибка входа. Попробуй ещё раз.");
+      setLoading(false);
+      return;
     }
 
     if (!data?.user) {
-      throw new Error("User не пришёл из API.");
+      setError("User не пришёл из API.");
+      setLoading(false);
+      return;
     }
+
+    onSuccess("", data.user);
+    onClose();
+  } catch (err: any) {
+    console.error("LOGIN ERROR:", err);
+    setError(err?.message ? Ошибка: ${err.message} : "Ошибка подключения к серверу.");
+  } finally {
+    setLoading(false);
+  }
+};
 
     onSuccess(data?.token ?? "", data.user);
     onClose();
