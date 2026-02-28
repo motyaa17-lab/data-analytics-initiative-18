@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { User } from "@/hooks/useAuth";
 import { useAuth } from "@/hooks/useAuth";
 
-const LOGIN_URL = "/api?action=login";
+const LOGIN_URL = "/api/login";
 
 interface LoginModalProps {
   onClose: () => void;
