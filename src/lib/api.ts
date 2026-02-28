@@ -2,12 +2,15 @@ const BASE = "/api";
 
 function headers(method: string, token?: string | null) {
   const h: Record<string, string> = {};
-  if (method !== "GET") h["Content-Type"] = "application/json";
+
+  if (method !== "GET") {
+    h["Content-Type"] = "application/json";
+  }
 
   if (token) {
-    // максимально совместимо: и так, и так
-    h["Authorization"] = Bearer ${token};
-    h["X-Authorization"] = Bearer ${token};
+    // важно: ОБРАТНЫЕ КАВЫЧКИ
+    h["Authorization"] = `Bearer ${token}`;
+    h["X-Authorization"] = `Bearer ${token}`;
   }
 
   return h;
