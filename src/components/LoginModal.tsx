@@ -45,7 +45,6 @@ export default function LoginModal({
 }); // <- тут обязательно закрылись И } И )
 const raw = await res.text();
       // читаем тело как текст, чтобы уметь показать нормальную ошибку (даже если пришёл HTML/404)
-      const raw = await res.text();
 
       // пробуем распарсить JSON
       let data: LoginResponse | null = null;
