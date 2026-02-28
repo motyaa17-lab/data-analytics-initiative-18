@@ -1,4 +1,3 @@
-import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { createClient } from "@supabase/supabase-js";
 
 function getSupabase() {
@@ -10,7 +9,7 @@ function getSupabase() {
   return createClient(url, key);
 }
 
-export default async function handler(req: VercelRequest, res: VercelResponse) {
+export default async function handler(req: any, res: any) {
   res.setHeader("Content-Type", "application/json; charset=utf-8");
 
   const action = String(req.query.action ?? "");
