@@ -35,15 +35,15 @@ export default function LoginModal({
     setLoading(true);
 
     try {
-      const res = await fetch(LOGIN_URL, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-     body: JSON.stringify({
-  action: "login",
-  email: form.email,
-  password: form.password,
-}),
-
+     const res = await fetch(LOGIN_URL, {
+  method: "POST",
+  headers: { "Content-Type": "application/json" },
+  body: JSON.stringify({
+    email: form.email,
+    password: form.password,
+  }),
+}); // <- тут обязательно закрылись И } И )
+const raw = await res.text();
       // читаем тело как текст, чтобы уметь показать нормальную ошибку (даже если пришёл HTML/404)
       const raw = await res.text();
 
