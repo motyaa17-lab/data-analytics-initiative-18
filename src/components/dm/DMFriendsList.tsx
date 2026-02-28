@@ -84,7 +84,7 @@ export default function DMFriendsList({
                         className="w-9 h-9 rounded-full flex items-center justify-center text-white font-bold text-sm"
                         style={{ background: avatarColor(f.username) }}
                       >
-                        {f.username[0].toUpperCase()}
+                        {f.username?.[0]?.toUpperCase() || "?"}
                       </div>
                       {unread > 0 && (
                         <span className="absolute -top-1 -right-1 min-w-[16px] h-[16px] bg-[#ed4245] text-white text-[9px] font-bold rounded-full flex items-center justify-center px-0.5 leading-none">
@@ -121,7 +121,7 @@ export default function DMFriendsList({
                     className="w-9 h-9 rounded-full flex items-center justify-center text-white font-bold text-sm flex-shrink-0"
                     style={{ background: avatarColor(r.username) }}
                   >
-                    {r.username[0].toUpperCase()}
+                    {f.username?.[0]?.toUpperCase() || "?"}
                   </div>
                   <div className="min-w-0 flex-1">
                     <div className="text-white text-sm font-medium truncate">{r.username}</div>
