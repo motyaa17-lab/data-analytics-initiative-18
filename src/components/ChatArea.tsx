@@ -192,9 +192,8 @@ const ChatArea = ({ onSidebarOpen, onRegisterClick, user, token, channel, roomId
     }
   };
 
-  const sendMessage = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if ((!input.trim() && !imageUrl) || !token) return;
+const sendMessage = async () => {
+  if ((!input.trim() && !imageUrl) || !token) return;
 
     if (editingMsg) {
       const res = await api.messages.edit(token, editingMsg.id, input.trim());
