@@ -2,6 +2,7 @@ import { useState } from "react";
 import { X, Eye, EyeOff } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { User } from "@/hooks/useAuth";
+import { useAuth } from "@/hooks/useAuth";
 
 const LOGIN_URL = "/api/login";
 
@@ -24,6 +25,7 @@ export default function LoginModal({
 }: LoginModalProps) {
   const [showPassword, setShowPassword] = useState(false);
   const [form, setForm] = useState({ email: "", password: "" });
+  const { login } = useAuth();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
@@ -64,8 +66,9 @@ export default function LoginModal({
       }
 
       // token может отсутствовать — тогда передаём пустую строку
-      onSuccess(data.token ?? "", data.user);
-      onClose();
+login(data.token ?? "", data.user);
+onSuccess(data.token ?? "", data.user);
+onClose();
     } catch (err) {
       console.error("LOGIN ERROR:", err);
 
