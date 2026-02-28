@@ -1,36 +1,67 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
-export interface User {
-  id: number;
-  username: string;
-  favorite_game: string;
-  is_admin: boolean;
-  avatar_url?: string;
+export type User = {
+  id?: number;
+  username?: string;
+  favorite_game?: string;
+  is_admin?: boolean;
+};
+
+export const TOKEN_KEY = "frikords_token";
+export const USER_KEY = "frikords_user";
+
+function loadToken(): string | null {
+  try {
+    return localStorage.getItem(TOKEN_KEY);
+  } catch {
+    return null;
+  }
 }
 
-const TOKEN_KEY = "frikords_token";
-const USER_KEY = "frikords_user";
+function loadUser(): User | null {
+  try {
+    const raw = localStorage.getItem(USER_KEY);
+    if (!raw) return null;
+
+    const u = JSON.parse(raw);
+    if (!u || typeof u !== "object") return null;
+
+    // минимальная проверка
+    const username = typeof u.username === "string" ? u.username : "";
+    return { ...u, username };
+  } catch {
+    return null;
+  }
+}
 
 export function useAuth() {
-  const [user, setUser] = useState<User | null>(() => {
-    const saved = localStorage.getItem(USER_KEY);
-    return saved ? JSON.parse(saved) : null;
-  });
-  const [token, setToken] = useState<string | null>(() => localStorage.getItem(TOKEN_KEY));
+  const [token, setToken] = useState<string | null>(() => loadToken());
+  const [user, setUser] = useState<User | null>(() => loadUser());
 
   const login = (newToken: string, newUser: User) => {
-    localStorage.setItem(TOKEN_KEY, newToken);
-    localStorage.setItem(USER_KEY, JSON.stringify(newUser));
-    setToken(newToken);
-    setUser(newUser);
+    try {
+      localStorage.setItem(TOKEN_KEY, newToken ?? "");
+      localStorage.setItem(USER_KEY, JSON.stringify(newUser ?? {}));
+    } catch {}
+
+    setToken(newToken ?? "");
+    setUser(newUser ?? null);
   };
 
   const logout = () => {
-    localStorage.removeItem(TOKEN_KEY);
-    localStorage.removeItem(USER_KEY);
+    try {
+      localStorage.removeItem(TOKEN_KEY);
+      localStorage.removeItem(USER_KEY);
+    } catch {}
     setToken(null);
     setUser(null);
   };
 
-  return { user, token, login, logout, isLoggedIn: !!user };
+  // если localStorage меняется (иногда удобно при ручных тестах)
+  useEffect(() => {
+    setToken(loadToken());
+    setUser(loadUser());
+  }, []);
+
+  return { token, user, login, logout, setUser, setToken };
 }
