@@ -43,12 +43,13 @@ const Navbar = ({ onRegisterClick, onLoginClick, user }: NavbarProps) => {
             </Button>
           </>
         )}
-        {user && (
-          <div className="text-[#b9bbbe] text-sm hidden sm:block">
-            Привет, <span className="text-white font-medium">{user.username}</span>! 🎮
-          </div>
-        )}
-      </div>
+       {user && (
+  <div className="text-[#9bbbbe] text-sm hidden sm:block">
+    Привет, <span className="text-white font-medium">
+      {user.username || "Игрок"}
+    </span>! 🎮
+  </div>
+)}
 
       {!user && mobileMenuOpen && (
         <div className="sm:hidden mt-4 pt-4 border-t border-[#202225]">
