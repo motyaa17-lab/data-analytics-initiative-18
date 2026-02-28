@@ -102,19 +102,29 @@ const ChatArea = ({ onSidebarOpen, onRegisterClick, user, token, channel, roomId
     if (Array.isArray(data.typing)) setTypingUsers(data.typing as string[]);
   }, [token, channel]);
 
-  useEffect(() => {
-    setMessages([]);
-    setNewMsgCount(0);
-    setTypingUsers([]);
-    lastMsgIdRef.current = null;
-    setReplyTo(null);
-    setEditingMsg(null);
+ useEffect(() => {
+  if (!token) return;
+  if (!channel && !roomId) return;
+
+  setMessages([]);
+  setNewMsgCount(0);
+  setTypingUsers([]);
+  lastMsgIdRef.current = null;
+  setReplyTo(null);
+  setEditingMsg(null);
+
+  fetchMessages();
+  fetchOnline();
+  fetchTyping();
+
+  const interval = setInterval(() => {
     fetchMessages();
     fetchOnline();
     fetchTyping();
-    const interval = setInterval(() => { fetchMessages(); fetchOnline(); fetchTyping(); }, 3000);
-    return () => clearInterval(interval);
-  }, [channel, roomId]);
+  }, 3000);
+
+  return () => clearInterval(interval);
+}, [token, channel, roomId]);
 
   useEffect(() => {
     const close = () => setContextMenu(null);
