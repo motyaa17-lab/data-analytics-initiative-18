@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { User } from "@/hooks/useAuth";
 import { useAuth } from "@/hooks/useAuth";
 
-const LOGIN_URL = "/api/login";
+const LOGIN_URL = "/api?action=login";
 
 interface LoginModalProps {
   onClose: () => void;
@@ -38,11 +38,11 @@ export default function LoginModal({
       const res = await fetch(LOGIN_URL, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          email: form.email,
-          password: form.password,
-        }),
-      });
+     body: JSON.stringify({
+  action: "login",
+  email: form.email,
+  password: form.password,
+}),
 
       // читаем тело как текст, чтобы уметь показать нормальную ошибку (даже если пришёл HTML/404)
       const raw = await res.text();
