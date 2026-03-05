@@ -204,6 +204,8 @@ const ChatArea = ({ onSidebarOpen, onRegisterClick, user, token, channel, roomId
 
 const sendMessage = async (e?: React.FormEvent) => {
   e?.preventDefault();
+ 
+  console.log("SEND CLICK", { token, input, imageUrl, channel, roomId });
 
   if ((!input.trim() && !imageUrl) || !token) return;
 
