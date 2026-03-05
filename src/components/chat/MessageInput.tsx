@@ -114,8 +114,7 @@ export default function MessageInput({
   };
 
   const fmt = (s: number) => `${Math.floor(s / 60)}:${(s % 60).toString().padStart(2, "0")}`;
-  const canSend = (input.trim() || imagePreview) && !sending && !imageUploading;
-
+  const canSend = !!token && (input.trim() || imagePreview) && !sending && !imageUploading;
   return (
     <>
       {/* Reply / Edit bar */}
@@ -185,7 +184,14 @@ export default function MessageInput({
               </button>
             </div>
           ) : (
-            <form onSubmit={onSubmit} className="flex gap-2 items-center">
+           <form
+  onSubmit={(e) => {
+    e.preventDefault();
+    if (!token) return;      // если не залогинен — не отправляем
+    onSubmit(e);             // иначе вызываем твою отправку
+  }}
+  className="flex gap-2 items-center"
+>
               <input
                 ref={fileRef}
                 type="file"
