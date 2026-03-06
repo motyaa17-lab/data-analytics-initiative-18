@@ -26,11 +26,46 @@ const supabaseKey =
       return res.status(400).json({ error: error?.message || "Login failed" });
     }
 
-    const { data: appUser, error: userError } = await supabase
-      .from("users")
-      .select("*")
-      .eq("email", String(email))
-      .single();
+  const { data: foundUsers, error: userError } = await supabase
+  .from("users")
+  .select("*")
+  .eq("email", String(email))
+  .limit(1);
+
+if (userError) {
+  return res.status(400).json({ error: userError.message });
+}
+
+let appUser = foundUsers?.[0];
+
+if (!appUser) {
+  const username = String(email).split("@")[0];
+
+  const { data: insertedUsers, error: insertError } = await supabase
+    .from("users")
+    .insert([
+      {
+        username,
+        email: String(email),
+        password_hash: "supabase-auth",
+        favorite_game: null,
+        is_admin: false,
+        is_banned: false,
+      },
+    ])
+    .select("*")
+    .limit(1);
+
+  if (insertError) {
+    return res.status(400).json({ error: insertError.message });
+  }
+
+  appUser = insertedUsers?.[0];
+}
+
+if (!appUser) {
+  return res.status(400).json({ error: "User not found in users table" });
+}
 
     if (userError || !appUser) {
       return res.status(400).json({ error: userError?.message || "User not found in users table" });
