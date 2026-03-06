@@ -14,12 +14,16 @@ export default async function handler(req: any, res: any) {
       process.env.SUPABASE_KEY ||
       process.env.SUPABASE_SERVICE_KEY;
 
+    if (!supabaseKey) {
+      return res.status(500).json({ error: "No Supabase key found in env" });
+    }
+
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-const { data, error } = await supabase.auth.signUp({
-  email: email!,
-  password: password!,
-});
+    const { data, error } = await supabase.auth.signUp({
+      email: String(email),
+      password: String(password),
+    });
 
     if (error) {
       return res.status(400).json({ error: error.message });
@@ -30,8 +34,7 @@ const { data, error } = await supabase.auth.signUp({
       nickname,
       game,
     });
-
   } catch (e: any) {
-    return res.status(500).json({ error: e.message });
+    return res.status(500).json({ error: e.message || "Server error" });
   }
 }
