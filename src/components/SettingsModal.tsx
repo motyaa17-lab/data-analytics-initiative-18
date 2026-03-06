@@ -161,7 +161,11 @@ export default function SettingsModal({ user, token, onClose, onUpdate }: Props)
     setSaving(true);
     setStatus(null);
     setError(null);
-    const data = await api.settings.save(token, { username: username.trim(), favorite_game: game.trim() });
+  const data = await api.settings.save(token, {
+  user_id: user.id,
+  username: username.trim(),
+  favorite_game: game.trim()
+});
     setSaving(false);
     if (data.ok) {
       setStatus("Сохранено!");
