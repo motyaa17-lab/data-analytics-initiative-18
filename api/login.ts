@@ -33,10 +33,11 @@ export default async function handler(req: any, res: any) {
       return res.status(400).json({ error: error.message });
     }
 
-    return res.status(200).json({
-      user: data.user,
-      session: data.session,
-    });
+  return res.status(200).json({
+  user: data.user,
+  token: data.session?.access_token || "",
+  session: data.session,
+});
   } catch (e: any) {
     return res.status(500).json({ error: e.message || "Server error" });
   }
