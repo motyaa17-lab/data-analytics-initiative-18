@@ -1,3 +1,6 @@
+import type { VercelRequest, VercelResponse } from "@vercel/node";
+import { createClient } from "@supabase/supabase-js";
+
 function getSupabaseKey() {
   return (
     process.env.SUPABASE_ANON_KEY ||
