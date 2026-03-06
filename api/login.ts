@@ -14,14 +14,6 @@ export default async function handler(req: any, res: any) {
       process.env.SUPABASE_KEY ||
       process.env.SUPABASE_SERVICE_KEY;
 
-    if (!supabaseUrl) {
-      return res.status(500).json({ error: "SUPABASE_URL is missing" });
-    }
-
-    if (!supabaseKey) {
-      return res.status(500).json({ error: "No Supabase key found in env" });
-    }
-
     const supabase = createClient(supabaseUrl, supabaseKey);
 
     const { data, error } = await supabase.auth.signInWithPassword({
@@ -29,15 +21,25 @@ export default async function handler(req: any, res: any) {
       password: String(password),
     });
 
-    if (error) {
-      return res.status(400).json({ error: error.message });
+    if (error || !data.user) {
+      return res.status(400).json({ error: error?.message || "Login failed" });
     }
 
-  return res.status(200).json({
-  user: data.user,
-  token: data.session?.access_token || "",
-  session: data.session,
-});
+    const { data: appUser, error: userError } = await supabase
+      .from("users")
+      .select("*")
+      .eq("email", String(email))
+      .single();
+
+    if (userError || !appUser) {
+      return res.status(400).json({ error: userError?.message || "User not found in users table" });
+    }
+
+    return res.status(200).json({
+      token: data.session?.access_token || "",
+      user: appUser,
+      session: data.session,
+    });
   } catch (e: any) {
     return res.status(500).json({ error: e.message || "Server error" });
   }
