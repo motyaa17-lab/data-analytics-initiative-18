@@ -74,7 +74,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       // ВАЖНО: select().single() чтобы вернуть вставленную строку (иначе часто приходит пусто)
       const { data, error } = await sb
         .from("messages")
-        .insert([{ room_id, user_id, text }])
+       .insert([{ room_id, user_id, content: text }])
         .select("*")
         .single();
 
@@ -83,8 +83,71 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       // ОБЯЗАТЕЛЬНО так:
       return res.status(200).json({ message: data });
     }
+if (action === "createRoom") {
+  if (req.method !== "POST") {
+    return res.status(405).json({ error: "Method not allowed" });
+  }
 
+  const body = req.body ?? {};
+  const name = String(body.name ?? "").trim();
+  const description = String(body.description ?? "").trim();
+  const owner_id = Number(body.owner_id);
+
+  if (!name) {
+    return res.status(400).json({ error: "name is required" });
+  }
+
+  if (!owner_id) {
+    return res.status(400).json({ error: "owner_id is required" });
+  }
+
+  const sb = supabaseAnon();
+
+  const { data, error } = await sb
+    .from("rooms")
+    .insert([{ name, description: description || null, owner_id, is_public: true }])
+    .select("*")
+    .single();
+
+  if (error) return res.status(400).json({ error: error.message });
+
+  return res.status(200).json({ room: data });
+}
     // Если action не совпал
+    if (action === "settings") {
+  if (req.method !== "POST") {
+    return res.status(405).json({ error: "Method not allowed" });
+  }
+
+  const body = req.body ?? {};
+  const user_id = Number(body.user_id);
+  const username = String(body.username ?? "").trim();
+  const favorite_game = String(body.favorite_game ?? "").trim();
+
+  if (!user_id) {
+    return res.status(400).json({ error: "user_id is required" });
+  }
+
+  if (!username) {
+    return res.status(400).json({ error: "username is required" });
+  }
+
+  const sb = supabaseAnon();
+
+  const { data, error } = await sb
+    .from("users")
+    .update({
+      username,
+      favorite_game: favorite_game || null,
+    })
+    .eq("id", user_id)
+    .select("*")
+    .single();
+
+  if (error) return res.status(400).json({ error: error.message });
+
+  return res.status(200).json({ user: data });
+}
     return res.status(400).json({ error: `Unknown action: ${action}` });
   } catch (e: any) {
     return res.status(500).json({ error: e?.message ?? "Server error" });
