@@ -87,18 +87,20 @@ export const api = {
       ),
 
     send: (
-      token: string,
-      content: string,
-      channel?: string,
-      room_id?: number,
-      image_url?: string
-    ) =>
-     req("sendMessage", "POST", token, {
-        content,
-        ...(channel ? { channel } : {}),
-        ...(room_id ? { room_id } : {}),
-        ...(image_url ? { image_url } : {}),
-      }),
+  token: string,
+  content: string,
+  channel?: string,
+  room_id?: number,
+  image_url?: string,
+  user_id?: number
+) =>
+  req("sendMessage", "POST", token, {
+    content,
+    ...(channel ? { channel } : {}),
+    ...(room_id ? { room_id } : {}),
+    ...(image_url ? { image_url } : {}),
+    ...(user_id ? { user_id } : {}),
+  }),
 
     uploadImage: (token: string, image: string) =>
       req("upload_image", "POST", token, { image }),
@@ -149,8 +151,14 @@ export const api = {
       return asArray(r);
     },
 
-  create: (token: string, name: string, description: string, is_public: boolean) =>
-  req("createRoom", "POST", token, { name, description, is_public }),
+ create: (
+  token: string,
+  name: string,
+  description: string,
+  is_public: boolean,
+  owner_id: number
+) =>
+  req("createRoom", "POST", token, { name, description, is_public, owner_id }),
 
     join: (token: string, code: string) =>
 
@@ -171,8 +179,10 @@ export const api = {
   settings: {
     get: (token: string) => req("settings", "GET", token),
 
-    save: (token: string, data: { username?: string; favorite_game?: string }) =>
-      req("settings", "POST", token, data),
+  save: (
+  token: string,
+  data: { user_id: number; username?: string; favorite_game?: string }
+) => req("settings", "POST", token, data),
   },
 
   dm: {
