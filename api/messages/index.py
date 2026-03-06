@@ -73,7 +73,7 @@ def get_user(cur, schema, token, require_admin=False):
 
 def s3_client():
     return boto3.client('s3',
-        endpoint_url=os.environ.get('S3_ENDPOINT_URL', 'https://bucket.poehali.dev'),
+        endpoint_url=os.environ['S3_ENDPOINT_URL'],
         aws_access_key_id=os.environ['AWS_ACCESS_KEY_ID'],
         aws_secret_access_key=os.environ['AWS_SECRET_ACCESS_KEY'])
 
@@ -245,7 +245,7 @@ def handle(request_method, headers, query_params, body_str, ip):
         fname = f"voice/{uid}_{int(time.time())}_{secrets.token_hex(4)}.{ext}"
         s3 = s3_client()
         s3.put_object(Bucket='files', Key=fname, Body=audio_data, ContentType=f'audio/{ext}')
-        cdn_url = f"https://cdn.poehali.dev/projects/{os.environ['AWS_ACCESS_KEY_ID']}/bucket/{fname}"
+        cdn_url = f"{os.environ['CDN_BASE_URL']}/{fname}"
         return resp(200, {'url': cdn_url})
 
     # ─── DELETE MESSAGE ───────────────────────────────────────
@@ -459,7 +459,7 @@ def handle(request_method, headers, query_params, body_str, ip):
         key = f"avatars/{uid}_{int(time.time())}.{ext}"
         s3 = s3_client()
         s3.put_object(Bucket='files', Key=key, Body=img_bytes, ContentType=ct)
-        cdn_url = f"https://cdn.poehali.dev/projects/{os.environ['AWS_ACCESS_KEY_ID']}/bucket/{key}"
+        cdn_url = f"{os.environ['CDN_BASE_URL']}/{key}"
         cur.execute(f"UPDATE {schema}.users SET avatar_url='{cdn_url}' WHERE id={uid}")
         return resp(200, {'ok': True, 'avatar_url': cdn_url})
 
@@ -489,7 +489,7 @@ def handle(request_method, headers, query_params, body_str, ip):
         key = f"chat_images/{uid}_{int(time.time())}.{ext}"
         s3 = s3_client()
         s3.put_object(Bucket='files', Key=key, Body=img_bytes, ContentType=ct)
-        cdn_url = f"https://cdn.poehali.dev/projects/{os.environ['AWS_ACCESS_KEY_ID']}/bucket/{key}"
+        cdn_url = f"{os.environ['CDN_BASE_URL']}/{key}"
         return resp(200, {'ok': True, 'image_url': cdn_url})
 
     # ─── SETTINGS ────────────────────────────────────────────
