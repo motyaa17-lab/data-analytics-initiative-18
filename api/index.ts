@@ -1,12 +1,3 @@
-import type { VercelRequest, VercelResponse } from "@vercel/node";
-import { createClient } from "@supabase/supabase-js";
-
-function getEnv(name: string) {
-  const v = process.env[name];
-  if (!v) throw new Error(`Missing env: ${name}`);
-  return v;
-}
-
 function getSupabaseKey() {
   return (
     process.env.SUPABASE_ANON_KEY ||
@@ -75,7 +66,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       if (!user_id) return res.status(400).json({ error: "user_id is required" });
       if (!text) return res.status(400).json({ error: "text is required" });
 
-      const sb = supabaseService();
+     const sb = supabaseAnon();
 
       // ВАЖНО: select().single() чтобы вернуть вставленную строку (иначе часто приходит пусто)
       const { data, error } = await sb
