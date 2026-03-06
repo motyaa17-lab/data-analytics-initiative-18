@@ -1,8 +1,8 @@
 {
   "rewrites": [
-    {
-      "source": "/api/:path*",
-      "destination": "https://data-analytics-initiative-18--preview.poehali.dev/api/:path*"
-    }
+    { "source": "/api/register", "destination": "/api/register/index.py" },
+    { "source": "/api/login", "destination": "/api/login/index.py" },
+    { "source": "/api/messages", "destination": "/api/messages/index.py" },
+    { "source": "/((?!api/).*)", "destination": "/index.html" }
   ]
 }
