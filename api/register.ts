@@ -13,5 +13,3 @@ if (!supabaseUrl) {
 if (!supabaseKey) {
   throw new Error("No Supabase key found in env");
 }
-
-const supabase = createClient(supabaseUrl, supabaseKey);
