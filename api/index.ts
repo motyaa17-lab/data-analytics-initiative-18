@@ -7,12 +7,23 @@ function getEnv(name: string) {
   return v;
 }
 
-function supabaseAnon() {
-  return createClient(getEnv("SUPABASE_URL"), getEnv("SUPABASE_ANON_KEY"));
+function getSupabaseKey() {
+  return (
+    process.env.SUPABASE_ANON_KEY ||
+    process.env.SUPABASE_KEY ||
+    process.env.SUPABASE_SERVICE_KEY ||
+    ""
+  );
 }
 
-function supabaseService() {
-  return createClient(getEnv("SUPABASE_URL"), getEnv("SUPABASE_SERVICE_ROLE_KEY"));
+function supabaseAnon() {
+  const url = process.env.SUPABASE_URL || "";
+  const key = getSupabaseKey();
+
+  if (!url) throw new Error("SUPABASE_URL is missing");
+  if (!key) throw new Error("No Supabase key found in env");
+
+  return createClient(url, key);
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
