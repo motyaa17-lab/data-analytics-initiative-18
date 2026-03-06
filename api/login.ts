@@ -32,8 +32,6 @@ const supabaseKey =
   .eq("email", String(email))
   .limit(1);
 
-if (userError) {
-return res.status(400).json({ error: String(userError) });
 }
 
 let appUser = foundUsers?.[0];
