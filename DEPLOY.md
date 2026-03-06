@@ -10,15 +10,14 @@
 |---|---|---|
 | `DATABASE_URL` | `postgresql://postgres.[ref]:[password]@aws-0-[region].pooler.supabase.com:6543/postgres` | Supabase → Settings → Database → Connection string → Transaction pooler |
 | `MAIN_DB_SCHEMA` | `public` | фиксированное |
-| `S3_ENDPOINT_URL` | URL твоего S3-хранилища (например `https://s3.amazonaws.com` или другой провайдер) | от выбранного S3-провайдера |
-| `AWS_ACCESS_KEY_ID` | ключ доступа S3 | от выбранного S3-провайдера |
-| `AWS_SECRET_ACCESS_KEY` | секретный ключ S3 | от выбранного S3-провайдера |
-| `CDN_BASE_URL` | публичный URL для файлов, например `https://pub-xxx.r2.dev` | от выбранного S3/CDN провайдера |
+| `SUPABASE_URL` | `https://xxxxxxxxxxxx.supabase.co` | Supabase → Settings → API → Project URL |
+| `SUPABASE_SERVICE_KEY` | `eyJ...` (длинный ключ) | Supabase → Settings → API → service_role (Secret) |
+| `SUPABASE_BUCKET` | `uploads` | название бакета который создашь в шаге 2б |
 
-> Если загрузка файлов (аватары, голосовые, изображения) не нужна — S3_ENDPOINT_URL, AWS_* и CDN_BASE_URL можно не добавлять.
+> Файлы (аватары, изображения, голосовые) хранятся в Supabase Storage — отдельный S3 не нужен.
 
-### Supabase — переменные не нужны
-Supabase сам управляет БД. DATABASE_URL берётся из Supabase и вставляется в Vercel.
+### Supabase — переменные не нужны в самом Supabase
+Всё управляется через dashboard. Переменные берутся из Supabase и вставляются в Vercel.
 
 ---
 
@@ -39,13 +38,26 @@ Supabase сам управляет БД. DATABASE_URL берётся из Supaba
 4. Нажми **Run** (зелёная кнопка)
 5. Убедись что внизу появилось "Success. No rows returned"
 
-### Шаг 3 — Получить строку подключения
+### Шаг 2б — Создать бакет в Supabase Storage
 
-1. В Supabase: **Settings → Database**
-2. Прокрути до **Connection string**
-3. Выбери вкладку **Transaction pooler** (порт 6543)
-4. Скопируй строку — она начинается с `postgresql://postgres...`
-5. Замени `[YOUR-PASSWORD]` на твой пароль из шага 1
+1. В Supabase: **Storage** (левое меню) → **New bucket**
+2. Название: `uploads`
+3. Поставь галочку **Public bucket** — это позволит отображать файлы напрямую
+4. Нажми **Save**
+
+### Шаг 3 — Получить ключи из Supabase
+
+**DATABASE_URL:**
+1. Supabase → **Settings → Database**
+2. Прокрути до **Connection string** → вкладка **Transaction pooler** (порт 6543)
+3. Скопируй строку, замени `[YOUR-PASSWORD]` на пароль из шага 1
+
+**SUPABASE_URL и SUPABASE_SERVICE_KEY:**
+1. Supabase → **Settings → API**
+2. `Project URL` → скопируй → это `SUPABASE_URL`
+3. `Project API keys` → `service_role` → нажми **Reveal** → скопируй → это `SUPABASE_SERVICE_KEY`
+
+> service_role даёт полный доступ к Storage — храни в секрете, только на сервере (Vercel env)
 
 ### Шаг 4 — Загрузить код в GitHub
 
@@ -62,9 +74,11 @@ Supabase сам управляет БД. DATABASE_URL берётся из Supaba
    - **Build Command**: `npm run build`
    - **Output Directory**: `dist`
 4. Раскрой **Environment Variables** и добавь:
-   - `DATABASE_URL` — строка из шага 3
+   - `DATABASE_URL` — строка подключения из шага 3
    - `MAIN_DB_SCHEMA` — значение: `public`
-   - (опционально) S3 переменные если нужны файлы
+   - `SUPABASE_URL` — Project URL из шага 3
+   - `SUPABASE_SERVICE_KEY` — service_role ключ из шага 3
+   - `SUPABASE_BUCKET` — значение: `uploads`
 5. Нажми **Deploy**
 
 ### Шаг 6 — Создать первого администратора
@@ -96,6 +110,6 @@ UPDATE users SET is_admin = true WHERE email = 'твой@email.com';
 
 **Таблица не найдена** — `MAIN_DB_SCHEMA` должна быть `public`, или ты не запустил SQL из шага 2
 
-**Файлы не загружаются** — не заданы S3 переменные, это не критично если файлы не нужны
+**Файлы не загружаются** — проверь что бакет `uploads` создан и помечен как **Public** в Supabase Storage, и что `SUPABASE_URL` / `SUPABASE_SERVICE_KEY` / `SUPABASE_BUCKET` заданы в Vercel
 
 **Сайт показывает 404 на /api/** — проверь что `vercel.json` есть в корне репозитория

@@ -5,15 +5,10 @@ import re
 import time
 import random
 import secrets
+import urllib.request
+import urllib.error
 import psycopg2
 from http.server import BaseHTTPRequestHandler
-
-# S3/boto3 опционально — нужен только для загрузки файлов
-try:
-    import boto3
-    HAS_BOTO3 = True
-except ImportError:
-    HAS_BOTO3 = False
 
 CORS_H = {
     'Access-Control-Allow-Origin': '*',
@@ -71,11 +66,31 @@ def get_user(cur, schema, token, require_admin=False):
     return cur.fetchone()
 
 
-def s3_client():
-    return boto3.client('s3',
-        endpoint_url=os.environ['S3_ENDPOINT_URL'],
-        aws_access_key_id=os.environ['AWS_ACCESS_KEY_ID'],
-        aws_secret_access_key=os.environ['AWS_SECRET_ACCESS_KEY'])
+def supabase_upload(file_bytes: bytes, path: str, content_type: str) -> str:
+    """Загружает файл в Supabase Storage и возвращает публичный URL."""
+    url_base = os.environ['SUPABASE_URL'].rstrip('/')
+    bucket = os.environ.get('SUPABASE_BUCKET', 'uploads')
+    service_key = os.environ['SUPABASE_SERVICE_KEY']
+
+    upload_url = f"{url_base}/storage/v1/object/{bucket}/{path}"
+    req = urllib.request.Request(
+        upload_url,
+        data=file_bytes,
+        method='POST',
+        headers={
+            'Authorization': f'Bearer {service_key}',
+            'Content-Type': content_type,
+            'x-upsert': 'true',
+        }
+    )
+    try:
+        with urllib.request.urlopen(req) as resp:
+            resp.read()
+    except urllib.error.HTTPError as e:
+        raise RuntimeError(f"Supabase upload error {e.code}: {e.read().decode()}")
+
+    public_url = f"{url_base}/storage/v1/object/public/{bucket}/{path}"
+    return public_url
 
 
 def get_reactions(cur, schema, message_ids):
@@ -240,12 +255,12 @@ def handle(request_method, headers, query_params, body_str, ip):
             return err(400, 'Неверный формат base64')
         if len(audio_data) > 5 * 1024 * 1024:
             return err(400, 'Файл слишком большой (макс 5MB)')
-        if not HAS_BOTO3: return err(500, 'S3 не настроен')
         ext = body.get('ext', 'webm')
         fname = f"voice/{uid}_{int(time.time())}_{secrets.token_hex(4)}.{ext}"
-        s3 = s3_client()
-        s3.put_object(Bucket='files', Key=fname, Body=audio_data, ContentType=f'audio/{ext}')
-        cdn_url = f"{os.environ['CDN_BASE_URL']}/{fname}"
+        try:
+            cdn_url = supabase_upload(audio_data, fname, f'audio/{ext}')
+        except RuntimeError as e:
+            return err(500, str(e))
         return resp(200, {'url': cdn_url})
 
     # ─── DELETE MESSAGE ───────────────────────────────────────
@@ -455,11 +470,11 @@ def handle(request_method, headers, query_params, body_str, ip):
             return err(400, 'Допустимы только JPG, PNG, WebP')
         img_bytes = base64.b64decode(b64data)
         if len(img_bytes) > 2 * 1024 * 1024: return err(400, 'Файл больше 2MB')
-        if not HAS_BOTO3: return err(500, 'S3 не настроен')
         key = f"avatars/{uid}_{int(time.time())}.{ext}"
-        s3 = s3_client()
-        s3.put_object(Bucket='files', Key=key, Body=img_bytes, ContentType=ct)
-        cdn_url = f"{os.environ['CDN_BASE_URL']}/{key}"
+        try:
+            cdn_url = supabase_upload(img_bytes, key, ct)
+        except RuntimeError as e:
+            return err(500, str(e))
         cur.execute(f"UPDATE {schema}.users SET avatar_url='{cdn_url}' WHERE id={uid}")
         return resp(200, {'ok': True, 'avatar_url': cdn_url})
 
@@ -485,11 +500,11 @@ def handle(request_method, headers, query_params, body_str, ip):
             return err(400, 'Допустимы только JPG, PNG, WebP, GIF')
         img_bytes = base64.b64decode(b64data)
         if len(img_bytes) > 8 * 1024 * 1024: return err(400, 'Файл больше 8MB')
-        if not HAS_BOTO3: return err(500, 'S3 не настроен')
         key = f"chat_images/{uid}_{int(time.time())}.{ext}"
-        s3 = s3_client()
-        s3.put_object(Bucket='files', Key=key, Body=img_bytes, ContentType=ct)
-        cdn_url = f"{os.environ['CDN_BASE_URL']}/{key}"
+        try:
+            cdn_url = supabase_upload(img_bytes, key, ct)
+        except RuntimeError as e:
+            return err(500, str(e))
         return resp(200, {'ok': True, 'image_url': cdn_url})
 
     # ─── SETTINGS ────────────────────────────────────────────
