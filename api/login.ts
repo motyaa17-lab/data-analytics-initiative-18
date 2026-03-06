@@ -8,12 +8,12 @@ export default async function handler(req: any, res: any) {
       return res.status(400).json({ error: "Email and password required" });
     }
 
- const supabaseUrl = process.env.SUPABASE_URL as string;
-
-const supabaseKey =
-  (process.env.SUPABASE_ANON_KEY ||
-  process.env.SUPABASE_KEY ||
-  process.env.SUPABASE_SERVICE_KEY) as string;
+    const supabaseUrl = process.env.SUPABASE_URL as string;
+    const supabaseKey = (
+      process.env.SUPABASE_ANON_KEY ||
+      process.env.SUPABASE_KEY ||
+      process.env.SUPABASE_SERVICE_KEY
+    ) as string;
 
     const supabase = createClient(supabaseUrl, supabaseKey);
 
@@ -26,46 +26,45 @@ const supabaseKey =
       return res.status(400).json({ error: String(error || "Login failed") });
     }
 
-  const { data: foundUsers, error: userError } = await supabase
-  .from("users")
-  .select("*")
-  .eq("email", String(email))
-  .limit(1);
+    const { data: foundUsers, error: userError } = await supabase
+      .from("users")
+      .select("*")
+      .eq("email", String(email))
+      .limit(1);
 
-}
+    if (userError) {
+      return res.status(400).json({ error: String(userError) });
+    }
 
-let appUser = foundUsers?.[0];
+    let appUser = foundUsers?.[0];
 
-if (!appUser) {
-  const username = String(email).split("@")[0];
+    if (!appUser) {
+      const username = String(email).split("@")[0];
 
-  const { data: insertedUsers, error: insertError } = await supabase
-    .from("users")
-    .insert([
-      {
-        username,
-        email: String(email),
-        password_hash: "supabase-auth",
-        favorite_game: null,
-        is_admin: false,
-        is_banned: false,
-      },
-    ])
-    .select("*")
-    .limit(1);
-if (insertError) {
-  return res.status(400).json({ error: String(insertError) });
-}
+      const { data: insertedUsers, error: insertError } = await supabase
+        .from("users")
+        .insert([
+          {
+            username,
+            email: String(email),
+            password_hash: "supabase-auth",
+            favorite_game: null,
+            is_admin: false,
+            is_banned: false,
+          },
+        ])
+        .select("*")
+        .limit(1);
 
-  appUser = insertedUsers?.[0];
-}
+      if (insertError) {
+        return res.status(400).json({ error: String(insertError) });
+      }
 
-if (!appUser) {
-  return res.status(400).json({ error: "User not found in users table" });
-}
+      appUser = insertedUsers?.[0];
+    }
 
-    if (userError || !appUser) {
-      return res.status(400).json({ error: userError?.message || "User not found in users table" });
+    if (!appUser) {
+      return res.status(400).json({ error: "User not found in users table" });
     }
 
     return res.status(200).json({
@@ -74,6 +73,6 @@ if (!appUser) {
       session: data.session,
     });
   } catch (e: any) {
-    return res.status(500).json({ error: e.message || "Server error" });
+    return res.status(500).json({ error: e?.message || "Server error" });
   }
 }
