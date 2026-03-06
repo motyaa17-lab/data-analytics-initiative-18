@@ -93,7 +93,7 @@ export const api = {
       room_id?: number,
       image_url?: string
     ) =>
-      req("messages", "POST", token, {
+     req("sendMessage", "POST", token, {
         content,
         ...(channel ? { channel } : {}),
         ...(room_id ? { room_id } : {}),
@@ -112,7 +112,7 @@ export const api = {
       voice_url: string,
       room_id?: number
     ) =>
-      req("messages", "POST", token, {
+     req("sendMessage", "POST", token, {
         content: "",
         channel,
         voice_url,
@@ -149,8 +149,8 @@ export const api = {
       return asArray(r);
     },
 
-    create: (token: string, name: string, description: string, is_public: boolean) =>
-      req("rooms", "POST", token, { name, description, is_public }),
+  create: (token: string, name: string, description: string, is_public: boolean) =>
+  req("createRoom", "POST", token, { name, description, is_public }),
 
     join: (token: string, code: string) =>
 
