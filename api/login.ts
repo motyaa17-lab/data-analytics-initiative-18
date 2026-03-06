@@ -8,11 +8,12 @@ export default async function handler(req: any, res: any) {
       return res.status(400).json({ error: "Email and password required" });
     }
 
-    const supabaseUrl = process.env.SUPABASE_URL!;
-    const supabaseKey =
-      process.env.SUPABASE_ANON_KEY ||
-      process.env.SUPABASE_KEY ||
-      process.env.SUPABASE_SERVICE_KEY;
+ const supabaseUrl = process.env.SUPABASE_URL as string;
+
+const supabaseKey =
+  (process.env.SUPABASE_ANON_KEY ||
+  process.env.SUPABASE_KEY ||
+  process.env.SUPABASE_SERVICE_KEY) as string;
 
     const supabase = createClient(supabaseUrl, supabaseKey);
 
