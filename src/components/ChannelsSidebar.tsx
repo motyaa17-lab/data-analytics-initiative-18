@@ -87,7 +87,8 @@ const ChannelsSidebar = ({ mobileSidebarOpen, onClose, activeChannel, activeRoom
     if (!token || !newRoomName.trim()) return;
     setCreating(true);
     setError("");
-    const data = await api.rooms.create(token, newRoomName.trim(), newRoomDesc.trim(), true);
+    const { user } = useAuth();
+   const data = await api.rooms.create(token, newRoomName.trim(), newRoomDesc.trim(), true, user.id);
     setCreating(false);
     if (data.room) {
       const room = data.room as Room;
