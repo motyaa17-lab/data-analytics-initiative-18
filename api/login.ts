@@ -23,7 +23,7 @@ const supabaseKey =
     });
 
     if (error || !data.user) {
-      return res.status(400).json({ error: error?.message || "Login failed" });
+      return res.status(400).json({ error: String(error || "Login failed") });
     }
 
   const { data: foundUsers, error: userError } = await supabase
@@ -33,7 +33,7 @@ const supabaseKey =
   .limit(1);
 
 if (userError) {
-  return res.status(400).json({ error: userError.message });
+return res.status(400).json({ error: String(userError) });
 }
 
 let appUser = foundUsers?.[0];
