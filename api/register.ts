@@ -17,7 +17,7 @@ const supabaseKey =
 
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    const { data, error } = await supabase.auth.signUp({
+  const { error } = await supabase.auth.signUp({
       email: String(email),
       password: String(password),
     });
