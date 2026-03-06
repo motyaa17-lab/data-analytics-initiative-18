@@ -1,7 +1,4 @@
-import { createClient } from "@supabase/supabase-js";
-
-export default async function handler(req: any, res: any) {
-
+export default async function handler(_req: any, res: any) {
   const supabaseUrl = process.env.SUPABASE_URL!;
   const supabaseKey =
     process.env.SUPABASE_ANON_KEY ||
@@ -15,8 +12,6 @@ export default async function handler(req: any, res: any) {
   if (!supabaseKey) {
     throw new Error("No Supabase key found in env");
   }
-
-  const supabase = createClient(supabaseUrl, supabaseKey);
 
   res.status(200).json({ ok: true });
 }
