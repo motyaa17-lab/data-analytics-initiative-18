@@ -55,10 +55,9 @@ if (!appUser) {
     ])
     .select("*")
     .limit(1);
-
-  if (insertError) {
-    return res.status(400).json({ error: insertError.message });
-  }
+if (insertError) {
+  return res.status(400).json({ error: String(insertError) });
+}
 
   appUser = insertedUsers?.[0];
 }
