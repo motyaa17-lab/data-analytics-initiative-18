@@ -88,10 +88,13 @@ const ChannelsSidebar = ({ mobileSidebarOpen, onClose, activeChannel, activeRoom
     setCreating(true);
     setError("");
     const { user } = useAuth();
-  try {
+ try {
+  console.log("Начинаем создание комнаты...");
   const data = await api.rooms.create(token, newRoomName.trim(), newRoomDesc.trim(), true, user.id);
+  console.log("Результат создания комнаты:", data);
   if (data.room) {
-    // логика для работы с созданной комнатой
+    // Логика успешного создания
+    setRoomCreated(true);
   } else {
     setError(data.error || "Ошибка создания комнаты");
   }
