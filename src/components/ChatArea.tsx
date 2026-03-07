@@ -229,7 +229,23 @@ const sendMessage = async (e?: React.FormEvent) => {
     setImagePreview(null);
     setImageUrl(null);
   const { user } = useAuth();
-    const data = await api.messages.send(token, content, channel, roomId, attachedImageUrl, user.id);
+    try {
+  const data = await api.messages.send(token, content, channel, roomId, attachedImageUrl);
+  if (data.success && data.message) {
+    const msg = data.message as Message;
+    setMessages((prev) => [...prev, msg]);
+    setContent("");
+    setReplyTo(null);
+    setImagePreview(null);
+    setAttachedImageUrl(null);
+  } else {
+    console.error("SEND MESSAGE ERROR:", data);
+  }
+} catch (e) {
+  console.error("SEND MESSAGE ERROR:", e);
+} finally {
+  setSending(false);
+}
     setSending(false);
     if (data.success && data.message) {
       const msg = data.message as Message;
