@@ -56,7 +56,7 @@ export default async function handler(req: any, res: any) {
     let appUser = foundUsers?.[0];
 
     if (!appUser) {
-      const username = String(email).split("@")[0];
+     const username = `${String(email).split("@")[0]}_${String(data.user.id).slice(0, 6)}`;
 
       const { data: insertedUsers, error: insertError } = await supabase
         .from("users")
