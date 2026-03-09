@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { ArrowRight, Hash, LogOut, Plus, X, Copy, Check, Link, UserPlus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import Icon from "@/components/ui/icon";
-import { User } from "@/hooks/useAuth";
+import { useAuth, User } from "@/hooks/useAuth";
 import { api } from "@/lib/api";
 
 const CHANNELS = [
