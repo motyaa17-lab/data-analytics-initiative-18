@@ -1,5 +1,18 @@
 import { createClient } from "@supabase/supabase-js";
 
+function errText(err: any, fallback: string) {
+  if (!err) return fallback;
+  if (typeof err === "string") return err;
+  if (typeof err?.message === "string") return err.message;
+  if (typeof err?.error_description === "string") return err.error_description;
+  if (typeof err?.error === "string") return err.error;
+  try {
+    return JSON.stringify(err);
+  } catch {
+    return fallback;
+  }
+}
+
 export default async function handler(req: any, res: any) {
   try {
     const { email, password } = req.body || {};
@@ -23,7 +36,9 @@ export default async function handler(req: any, res: any) {
     });
 
     if (error || !data.user) {
-     return res.status(400).json({ error: error?.message || "Login failed" });
+      return res.status(400).json({
+        error: errText(error, "Login failed"),
+      });
     }
 
     const { data: foundUsers, error: userError } = await supabase
@@ -33,7 +48,9 @@ export default async function handler(req: any, res: any) {
       .limit(1);
 
     if (userError) {
-      return res.status(400).json({ error: String(userError) });
+      return res.status(400).json({
+        error: errText(userError, "User lookup failed"),
+      });
     }
 
     let appUser = foundUsers?.[0];
@@ -57,7 +74,9 @@ export default async function handler(req: any, res: any) {
         .limit(1);
 
       if (insertError) {
-        return res.status(400).json({ error: String(insertError) });
+        return res.status(400).json({
+          error: errText(insertError, "User insert failed"),
+        });
       }
 
       appUser = insertedUsers?.[0];
@@ -73,6 +92,8 @@ export default async function handler(req: any, res: any) {
       session: data.session,
     });
   } catch (e: any) {
-    return res.status(500).json({ error: e?.message || "Server error" });
+    return res.status(500).json({
+      error: errText(e, "Server error"),
+    });
   }
 }
