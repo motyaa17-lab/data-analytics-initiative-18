@@ -23,7 +23,7 @@ export default async function handler(req: any, res: any) {
     });
 
     if (error || !data.user) {
-      return res.status(400).json({ error: String(error || "Login failed") });
+     return res.status(400).json({ error: error?.message || "Login failed" });
     }
 
     const { data: foundUsers, error: userError } = await supabase
